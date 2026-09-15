@@ -1,32 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
+import { refreshSession } from "@/lib/supabase/middleware";
 
-// Lightweight shared-passcode gate for a small internal team (Jennifer,
-// Edwin, Anne, Twesa, Diallo) — not real per-user authentication. If
-// APP_PASSCODE isn't set, the app is open (fine for local dev / a private
-// preview URL). Set it once you deploy somewhere reachable by anyone with
-// the link.
-//
-// This is deliberately simple: one shared password, one cookie, no user
-// accounts. If per-person accounts or roles are ever needed, swap this for
-// NextAuth or similar — nothing else in the app assumes this approach.
+// v2.0: real per-user Supabase Auth replaces v1.0's shared passcode
+// (that gate — APP_PASSCODE, app/api/login — is gone; see
+// claude/vbp-navigator-standalone-app.md for why). If Supabase env vars
+// aren't set, the app stays open — same "fine for local dev, set it
+// before deploying" behavior v1.0 had.
 //
 // Named "proxy" (not "middleware") per Next.js 16's renamed convention.
 
-const COOKIE_NAME = "vbp_auth";
-
-export function proxy(req: NextRequest) {
-  const passcode = process.env.APP_PASSCODE;
-  if (!passcode) return NextResponse.next();
+export async function proxy(req: NextRequest) {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return NextResponse.next();
 
   const { pathname } = req.nextUrl;
-  if (pathname === "/login" || pathname === "/api/login") {
+  if (pathname === "/login" || pathname.startsWith("/auth")) {
     return NextResponse.next();
   }
 
-  const cookie = req.cookies.get(COOKIE_NAME)?.value;
-  if (cookie === passcode) {
-    return NextResponse.next();
-  }
+  const { response, user } = await refreshSession(req);
+  if (user) return response;
 
   const loginUrl = new URL("/login", req.url);
   loginUrl.searchParams.set("next", pathname);
@@ -34,5 +26,5 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|icons).*)"],
 };

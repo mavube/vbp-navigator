@@ -5,7 +5,7 @@ import { FINDINGS } from "@/lib/findings-data";
 
 type Status = "open" | "confirmed" | "resolved";
 interface FindingRow {
-  id: string;
+  key: string;
   status: Status;
   note: string;
   updatedAt: string;
@@ -38,8 +38,8 @@ export function Findings() {
         const next = { ...prev };
         for (const r of data) {
           // Don't clobber a note the user is actively typing / hasn't saved.
-          if (dirty.current[r.id]) continue;
-          next[r.id] = r;
+          if (dirty.current[r.key]) continue;
+          next[r.key] = r;
         }
         return next;
       });
@@ -75,7 +75,7 @@ export function Findings() {
   function setStatus(id: string, status: Status) {
     setRows((prev) => ({
       ...prev,
-      [id]: { ...(prev[id] || { id, note: "", updatedAt: "" }), status },
+      [id]: { ...(prev[id] || { key: id, note: "", updatedAt: "" }), status },
     }));
     patch(id, { status });
   }

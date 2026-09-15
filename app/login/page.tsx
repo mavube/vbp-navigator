@@ -1,12 +1,19 @@
 "use client";
 
+// v2.0: email/password sign-in via Supabase Auth, replacing v1.0's
+// shared-passcode form. There's no self-serve sign-up yet — an Org Admin
+// creates accounts (see README "Inviting people" for the bootstrap SQL
+// until a real invite flow exists) — so this page only signs people in.
+
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const [passcode, setPasscode] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -14,41 +21,43 @@ function LoginForm() {
     e.preventDefault();
     setBusy(true);
     setError("");
-    try {
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ passcode }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        router.push(params.get("next") || "/");
-        router.refresh();
-      } else {
-        setError(data.error || "Incorrect passcode");
-      }
-    } catch {
-      setError("Something went wrong — try again.");
-    } finally {
+    const supabase = createClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (signInError) {
+      setError(signInError.message);
       setBusy(false);
+      return;
     }
+    router.push(params.get("next") || "/");
+    router.refresh();
   }
 
   return (
     <div className="login-wrap">
       <form className="login-card" onSubmit={submit}>
         <h1>VBP Navigator</h1>
-        <p>Enter the shared passcode to continue.</p>
+        <p>Sign in to continue.</p>
+        <input
+          type="email"
+          autoFocus
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email"
+        />
         <input
           type="password"
-          autoFocus
-          value={passcode}
-          onChange={(e) => setPasscode(e.target.value)}
-          placeholder="Passcode"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
         />
         {error && <p className="login-error">{error}</p>}
-        <button type="submit" disabled={busy || !passcode}>
-          {busy ? "Checking…" : "Enter"}
+        <button type="submit" disabled={busy || !email || !password}>
+          {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
     </div>

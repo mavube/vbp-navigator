@@ -1,10 +1,22 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "@/styles/design-tokens.css";
+import "@/styles/components.css";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { VersionBadge } from "@/components/ui/VersionBadge";
+import { TopNav } from "@/components/ui/TopNav";
 
 export const metadata: Metadata = {
-  title: "VBP Navigator",
+  title: "VBP Navigator OS",
   description:
-    "The Service & Value Architecture behind VBP's own operation — built on the ValueBlueprint® method.",
+    "Service management on the ValueBlueprint® method — Service & Value Architecture, tasks, pipeline, budget, and more.",
+  manifest: "/manifest.json",
+  icons: { icon: "/icons/icon-192.png", apple: "/icons/icon-192.png" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#2563EB",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -14,7 +26,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <TopNav />
+        {children}
+        <VersionBadge />
+        <ServiceWorkerRegister />
+      </body>
     </html>
   );
 }
