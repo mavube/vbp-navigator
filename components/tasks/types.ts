@@ -14,5 +14,6 @@ export interface Task {
   description: string;
   status: TaskStatus;
   assigneeId: string | null;
+  assigneeName: string;
   dueDate: string | null;
 }

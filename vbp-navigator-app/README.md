@@ -9,15 +9,16 @@ tool) — see `claude/vbp-navigator-os-v2-alignment.md` and
 plan. This README documents both — sections below say which version they
 describe.
 
-## v2.0 status: Foundation through Phase 5 (Budget + Compensation)
+## v2.0 status: Foundation through Phase 6 (Service Requests + Collaboration)
 
 Foundation (multi-tenant data model, Supabase Auth, design system core,
 PWA shell) is in — see **"v2.0 Foundation setup"** below. **Phase 2
 (Processes/Tasks)**, **Phase 3 (Pipeline/Leads)**, **Phase 4 (Classes)**,
-and **Phase 5 (Budget + Compensation Earning Service)** are also in — see
-their sections below. Remaining modules (Service Requests, Collaboration,
-Capabilities/Outcomes) come next, each additive on top of what's here.
-Full roadmap: `claude/vbp-navigator-os-v2-build-guide.md`.
+**Phase 5 (Budget + Compensation Earning Service)**, and **Phase 6
+(Service Requests + Collaboration)** are also in — see their sections
+below. Remaining: Phase 7 (Capabilities/Workload + Outcomes metrics),
+the last one on the roadmap. Full roadmap:
+`claude/vbp-navigator-os-v2-build-guide.md`.
 
 ## What's here
 
@@ -71,6 +72,8 @@ on real accounts, roles, and row-level tenant isolation:
    - `supabase/migrations/0005_phase4_classes.sql`
    - `supabase/migrations/0006_phase5_budget.sql`
    - `supabase/migrations/0007_phase5_compensation.sql`
+   - `supabase/migrations/0008_phase6_service_requests.sql`
+   - `supabase/migrations/0009_phase6_collaboration.sql`
    (or `supabase db push` with the Supabase CLI, if you have a project linked).
 3. **Set env vars** (`.env` locally, or your host's dashboard in production) — from the Supabase project's Settings → API:
    ```
@@ -203,6 +206,31 @@ actual cash outlay, since the deduction lines are withheld and remitted
 on the employee's behalf rather than kept) — see
 `lib/db-compensation.ts`'s file comment for the reasoning.
 
+## Phase 6: Service Requests + Collaboration
+
+`/service-requests` — ITSM-style requests and incidents, each with a
+`type` (request/incident), `priority` (low/medium/high/urgent), and
+`status` (open → in_progress → resolved → closed). Submitting one is
+open to anyone — Requester is the default role for any staff member
+(alignment doc Section 4) — moving it through status is gated to that
+service's owner/contributor or an Org Admin, same shape as Tasks.
+
+Collaboration isn't a separate page — it's one reusable component,
+`components/collaboration/CommentThread.tsx`, embedded directly on
+whatever it's about: a Task card, a Lead, a Class, a Budget Request, a
+Service Request. Per the vision doc, this is deliberate — "collaboration
+lives where the work is, not in a separate chat surface." The backing
+table (`comments`) is polymorphic: `entity_type` + `entity_id` instead
+of a dozen near-identical `task_comments` / `lead_comments` tables, so a
+future module can host a thread just by picking a consistent
+`entity_type` string, no schema change required.
+
+A comment's byline is resolved server-side from the signed-in user's
+own session when one exists (`lib/permissions.ts`'s `resolveDisplayName`)
+so nobody can post as someone else; local dev, with no session to
+resolve, trusts whatever name is typed into the form — same trust
+model as every other local-dev permission check in this app.
+
 ## Deploying
 
 The app is a standard Next.js app — deploy it anywhere Next.js runs
@@ -262,6 +290,7 @@ app/
   classes/page.tsx                  — v2.0 Phase 4: the Classes page
   budget/page.tsx                     — v2.0 Phase 5: the Budget page (requests/expenses/invoices)
   compensation/page.tsx                 — v2.0 Phase 5: the Compensation Earning Service page
+  service-requests/page.tsx               — v2.0 Phase 6: the Service Requests page
   api/
     findings/route.ts          — GET all findings for the caller's org (auto-seeds)
     findings/[id]/route.ts      — PATCH one finding's status/note, scoped to org
@@ -280,6 +309,9 @@ app/
     invoices/[id]/route.ts                              — PATCH status (unpaid/paid/overdue)
     compensation/route.ts                                 — GET (list) / POST (create draft entry, computes Net Pay)
     compensation/[id]/route.ts                              — PATCH finalize (Budget Approver only; generates an Expense)
+    service-requests/route.ts                                 — GET (list) / POST (submit — anyone in the org)
+    service-requests/[id]/route.ts                              — PATCH status (Service Owner/Contributor/Org Admin only)
+    comments/route.ts                                             — GET (?entityType=&entityId=) / POST (post a comment — anyone)
 components/
   NavigatorApp.tsx          — tabs, layout, all static copy for both v1.0 tabs
   InternalChain.tsx          — the internal-ops service-chain SVG diagram
@@ -294,6 +326,9 @@ components/
   classes/                                  — v2.0 Phase 4: ClassBoard, NewClassForm, ClassItem (embeds the setup checklist), types
   budget/                                     — v2.0 Phase 5: BudgetWorkspace (tabs) + Requests/Expenses/Invoices sections, types
   compensation/                                 — v2.0 Phase 5: CompensationBoard, NewEntryForm, EntryItem (shows the full breakdown), types
+  service-requests/                               — v2.0 Phase 6: RequestBoard, NewRequestForm, RequestItem, types
+  collaboration/
+    CommentThread.tsx                               — v2.0 Phase 6: the one reusable comment-thread component, embedded across Tasks/Leads/Classes/Budget Requests/Service Requests
 lib/
   db-driver.ts       — shared Postgres/SQLite connection setup + the RLS-vs-app-filtering note (read this first)
   db.ts                — findings data layer, now org-scoped
@@ -306,7 +341,9 @@ lib/
   db-invoices.ts                      — the invoices table's data layer (both directions)
   db-compensation.ts                    — compensation_rate_configs + compensation_entries; finalize also creates the linked Expense
   payroll.ts                              — pure Net Pay / progressive PAYE math, no DB — see scripts/verify-payroll.ts
-  permissions.ts               — app-level role checks (mirrors the RLS policies for the DATABASE_URL code path); canApproveBudget gates Budget/Compensation approval
+  db-service-requests.ts                    — the service_requests table's data layer
+  db-comments.ts                              — the polymorphic comments table's data layer (entity_type + entity_id)
+  permissions.ts               — app-level role checks (mirrors the RLS policies for the DATABASE_URL code path); canApproveBudget gates Budget/Compensation approval, resolveDisplayName resolves a comment/request byline from the session
   findings-data.ts    — the fixed title/body copy for the 4 seeded findings
   current-org.ts        — resolves the signed-in user's org (or "local-dev" if Supabase isn't configured)
   roles.ts                — the six v2.0 role constants (see the alignment doc Section 4)

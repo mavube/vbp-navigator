@@ -163,3 +163,12 @@ export async function updateLeadStage(orgId: string, id: string, stage: LeadStag
       .run(stage, now, orgId, id);
   }
 }
+
+// Exported so lib/rollups.ts can force this table into existence on the
+// local SQLite driver before running a raw aggregation query against it
+// directly (ensureSchema() above is otherwise only ever called lazily,
+// from this module's own read/write functions). No-op on Postgres, where
+// the migrations own the schema.
+export function ensureLeadsSchema(): Promise<void> {
+  return ensureSchema();
+}

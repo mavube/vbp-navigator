@@ -4,12 +4,14 @@ import { getCurrentOrgId } from "@/lib/current-org";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/tasks?serviceId=... — all tasks for the caller's org,
-// optionally filtered to one service.
+// GET /api/tasks?serviceId=...&classId=... — all tasks for the caller's
+// org, optionally filtered to one service or (e.g. for a class's setup
+// checklist) one class.
 export async function GET(req: NextRequest) {
   const orgId = await getCurrentOrgId();
   const serviceId = req.nextUrl.searchParams.get("serviceId") ?? undefined;
-  const tasks = await listTasks(orgId, serviceId);
+  const classId = req.nextUrl.searchParams.get("classId") ?? undefined;
+  const tasks = await listTasks(orgId, serviceId, classId);
   return NextResponse.json(tasks);
 }
 
@@ -34,6 +36,7 @@ export async function POST(req: NextRequest) {
     title: body.title.trim().slice(0, 200),
     description: typeof body.description === "string" ? body.description.slice(0, 4000) : undefined,
     assigneeId: typeof body.assigneeId === "string" ? body.assigneeId : null,
+    assigneeName: typeof body.assigneeName === "string" ? body.assigneeName.trim().slice(0, 200) : undefined,
     dueDate: typeof body.dueDate === "string" ? body.dueDate : null,
   });
   return NextResponse.json(task, { status: 201 });

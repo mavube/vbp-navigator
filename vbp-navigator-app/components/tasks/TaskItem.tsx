@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { CommentThread } from "@/components/collaboration/CommentThread";
 import type { Task, TaskStatus } from "@/components/tasks/types";
 
 const STATUS_TONE: Record<TaskStatus, "neutral" | "accent" | "success"> = {
@@ -67,6 +68,8 @@ export function TaskItem({
         </div>
       </div>
       {error && <p style={{ color: "var(--v2-danger)", fontSize: "0.8rem", margin: "8px 0 0" }}>{error}</p>}
+
+      <CommentThread entityType="task" entityId={task.id} />
     </Card>
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { CommentThread } from "@/components/collaboration/CommentThread";
 import type { Lead, LeadStage } from "@/components/pipeline/types";
 
 const STAGE_ORDER: LeadStage[] = ["new", "contacted", "assessed", "admitted"];
@@ -84,6 +85,8 @@ export function LeadItem({
         </div>
       </div>
       {error && <p style={{ color: "var(--v2-danger)", fontSize: "0.8rem", margin: "8px 0 0" }}>{error}</p>}
+
+      <CommentThread entityType="lead" entityId={lead.id} />
     </Card>
   );
 }

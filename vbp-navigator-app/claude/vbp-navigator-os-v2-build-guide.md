@@ -99,12 +99,22 @@ The big one — see alignment doc Sections 6–7 for full detail.
 - [ ] A rate-editing UI for `compensation_rate_configs` — currently edited by hand in SQL, same as the services catalog before Phase 2. Worth prioritizing before this goes live, since the seeded rates are illustrative only (see `lib/payroll.ts`'s file comment).
 - [ ] Confirm current NSSF/WCF/PAYE figures with the relevant Tanzanian authorities before relying on the seeded defaults for a real pay run.
 
-## Phase 6 — Service Requests + Collaboration
+## Phase 6 — Service Requests + Collaboration — done
 
-Not started. Grouped together since Collaboration's main use is commenting on tickets/tasks.
+Grouped together since Collaboration's main use is commenting on tickets/tasks.
 
-- [ ] `service_requests` table + RLS
-- [ ] Polymorphic `comments`/`activity` table (`entity_type`, `entity_id`) + RLS
+- [x] `service_requests` table + RLS (`supabase/migrations/0008_phase6_service_requests.sql`) — ITSM-style: `type` (request/incident), `priority` (low/medium/high/urgent), `status` (open/in_progress/resolved/closed). Same org/service-scoping pattern as tasks/leads/classes. Submitting one is open to anyone (Requester is the default role for any staff member per Section 4); moving it through status is gated to that service's owner/contributor or an Org Admin.
+- [x] Polymorphic `comments` table + RLS (`supabase/migrations/0009_phase6_collaboration.sql`) — `entity_type` (free-text: "task", "lead", "class", "budget_request", "service_request", ...) + `entity_id` (not a real FK — see the migration's comment for why a polymorphic reference can't be one in Postgres). Visible org-wide, postable by anyone, no edit/delete yet.
+- [x] `lib/permissions.ts`'s new `resolveDisplayName` — a comment's byline (and a service request's requester name) is resolved server-side from the signed-in user's own profile when a real session exists, so nobody can post as someone else; local dev (no session to resolve) trusts the client-supplied name, consistent with every other local-dev permission check in this file.
+- [x] `components/collaboration/CommentThread.tsx` — one reusable, collapsible comment-thread component (fetch, list, post) built once and embedded directly on the entity it's about, per the vision doc's "collaboration lives where the work is" framing, not a separate chat surface. Wired into `TaskItem`, `LeadItem`, `ClassItem`, `BudgetRequestItem`, and the new `RequestItem` — each addition was an import plus one line, proving the component really is generic across entity types.
+- [x] Service Requests UI (`/service-requests` — `app/service-requests/page.tsx`, `components/service-requests/{RequestBoard,NewRequestForm,RequestItem}.tsx`) — open vs. closed sections (same shape as Pipeline's active/closed split), priority + status badges, and an embedded comment thread on every request.
+- [x] Build verified clean, local smoke test verified end-to-end: create an incident-type request, list, advance status, confirm an invalid status is rejected, post a comment on it and confirm it lists back; created a Task and commented on it separately, confirmed the two comment threads stay isolated (a task's thread doesn't leak into a service request's thread just because both use the same `/api/comments` endpoint); confirmed missing `entityType`/`entityId` on the GET is rejected; confirmed Tasks/Pipeline/Classes/Budget/Compensation pages are all unaffected by the new modules.
+
+**Not done yet:**
+- [ ] Real service requests against VBP's actual service catalog once `supabase/seed/vbp_services.sql` has been run.
+- [ ] Comment editing/deletion — v1 is post-only, matching "lightweight, contextual" rather than a full-featured thread.
+- [ ] `@mention` is currently a plain comma-separated text field, not a real user picker with notifications — there's no notification system yet for a mention to trigger. Worth revisiting once there's a reason to (e.g. real accounts across a bigger team).
+- [ ] `CommentThread` isn't yet wired into Expenses, Invoices, or Compensation entries — straightforward to add (same one-import-one-line pattern used everywhere else) but skipped for now since those read more like financial records than collaborative work items.
 
 ## Phase 7 — Capabilities/Workload + Outcomes metrics
 

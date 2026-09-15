@@ -50,3 +50,30 @@ export function canManageService(ctx: UserContext, serviceId: string): boolean {
       ((r.role === "service_owner" || r.role === "contributor") && r.serviceId === serviceId)
   );
 }
+
+// Budget Approver is org-wide (Section 4 of the alignment doc — Anne at
+// VBP), not scoped to a service, so this doesn't take a serviceId.
+// Gates approving/rejecting a Budget Request and finalizing a
+// Compensation Earning Service entry — the same "Anne approves" step
+// in both flows.
+export function canApproveBudget(ctx: UserContext): boolean {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return true; // local dev: no gate
+  return ctx.roles.some((r) => r.role === "org_admin" || r.role === "budget_approver");
+}
+
+// Resolves a display name for byline-style fields (a comment's author,
+// a service request's requester) that are denormalized at write time
+// rather than always joined from `profiles` — see
+// lib/db-comments.ts's file comment for why. When a real session
+// exists, the signed-in user's own name wins over whatever the client
+// sent (so nobody can post as someone else); local dev has no session
+// to resolve, so it trusts the client-supplied name, same as every
+// other local-dev permission check in this file.
+export async function resolveDisplayName(ctx: UserContext, clientSupplied: string | undefined): Promise<string> {
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && ctx.userId) {
+    const supabase = await createClient();
+    const { data } = await supabase.from("profiles").select("full_name").eq("id", ctx.userId).single();
+    if (data?.full_name) return data.full_name;
+  }
+  return (clientSupplied ?? "").trim().slice(0, 200) || "Someone";
+}

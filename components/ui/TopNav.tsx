@@ -7,6 +7,11 @@ const LINKS = [
   { href: "/", label: "Service Architecture" },
   { href: "/tasks", label: "Tasks" },
   { href: "/pipeline", label: "Pipeline" },
+  { href: "/classes", label: "Classes" },
+  { href: "/budget", label: "Budget" },
+  { href: "/compensation", label: "Compensation" },
+  { href: "/service-requests", label: "Requests" },
+  { href: "/capabilities", label: "Capabilities" },
 ];
 
 // Minimal top nav so v2.0's new modules (starting with Tasks) are

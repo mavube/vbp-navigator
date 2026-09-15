@@ -10,6 +10,7 @@ const LINKS = [
   { href: "/classes", label: "Classes" },
   { href: "/budget", label: "Budget" },
   { href: "/compensation", label: "Compensation" },
+  { href: "/service-requests", label: "Requests" },
 ];
 
 // Minimal top nav so v2.0's new modules (starting with Tasks) are
