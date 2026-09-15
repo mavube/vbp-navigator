@@ -33,11 +33,11 @@ values ('6bd4d95e-271d-460d-8df0-16d49697c9f8', 'VBP (GDC Consulting)', 'vbp');
 
 -- ---------------------------------------------------------- 2. profiles
 insert into profiles (id, org_id, full_name, email) values
-  ('<DIALLO_USER_ID>',   'd5156765-e28e-44bf-a056-ea028ea5865d', 'Diallo',   'it@gdc.co.tz'),
-  ('<ANNE_USER_ID>',     '70479535-16fe-41ee-b822-3e49bf0f2c03', 'Anne',     'anne@gdc.co.tz'),
-  ('<JENNIFER_USER_ID>', 'c43f2139-b861-4558-8a1b-8011fa9ffa89', 'Jennifer', 'sdm@gdc.co.tz'),
-  ('<TWESA_USER_ID>',    '7ff45ae3-3b6a-4eca-8155-5c4a76e4b635', 'Twesa',    'twesa@gdc.co.tz'),
-  ('<EDWIN_USER_ID>',    '80c96574-06c9-4157-8fae-8ff81dd6119a', 'Edwin',    'edwin@gdc.co.tz');
+  ('<DIALLO_USER_ID>',   '6bd4d95e-271d-460d-8df0-16d49697c9f8', 'Diallo',   'it@gdc.co.tz'),
+  ('<ANNE_USER_ID>',     '6bd4d95e-271d-460d-8df0-16d49697c9f8', 'Anne',     'anne@gdc.co.tz'),
+  ('<JENNIFER_USER_ID>', '6bd4d95e-271d-460d-8df0-16d49697c9f8', 'Jennifer', 'sdm@gdc.co.tz'),
+  ('<TWESA_USER_ID>',    '6bd4d95e-271d-460d-8df0-16d49697c9f8', 'Twesa',    'twesa@gdc.co.tz'),
+  ('<EDWIN_USER_ID>',    '6bd4d95e-271d-460d-8df0-16d49697c9f8', 'Edwin',    'edwin@gdc.co.tz');
 
 -- ---------------------------------------------------------- 3. services
 -- VBP's real 5 CVS + 5 Enabling catalog (see
