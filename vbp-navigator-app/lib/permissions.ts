@@ -50,3 +50,13 @@ export function canManageService(ctx: UserContext, serviceId: string): boolean {
       ((r.role === "service_owner" || r.role === "contributor") && r.serviceId === serviceId)
   );
 }
+
+// Budget Approver is org-wide (Section 4 of the alignment doc — Anne at
+// VBP), not scoped to a service, so this doesn't take a serviceId.
+// Gates approving/rejecting a Budget Request and finalizing a
+// Compensation Earning Service entry — the same "Anne approves" step
+// in both flows.
+export function canApproveBudget(ctx: UserContext): boolean {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return true; // local dev: no gate
+  return ctx.roles.some((r) => r.role === "org_admin" || r.role === "budget_approver");
+}

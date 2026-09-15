@@ -9,15 +9,15 @@ tool) — see `claude/vbp-navigator-os-v2-alignment.md` and
 plan. This README documents both — sections below say which version they
 describe.
 
-## v2.0 status: Foundation + Phase 2 (Tasks) + Phase 3 (Pipeline) + Phase 4 (Classes)
+## v2.0 status: Foundation through Phase 5 (Budget + Compensation)
 
 Foundation (multi-tenant data model, Supabase Auth, design system core,
 PWA shell) is in — see **"v2.0 Foundation setup"** below. **Phase 2
-(Processes/Tasks)**, **Phase 3 (Pipeline/Leads)**, and **Phase 4
-(Classes)** are also in — see **"Phase 2: Tasks"**, **"Phase 3:
-Pipeline"**, and **"Phase 4: Classes"** below. Remaining modules (Budget +
-Compensation Earning Service, ...) come next, each additive on top of
-what's here. Full roadmap: `claude/vbp-navigator-os-v2-build-guide.md`.
+(Processes/Tasks)**, **Phase 3 (Pipeline/Leads)**, **Phase 4 (Classes)**,
+and **Phase 5 (Budget + Compensation Earning Service)** are also in — see
+their sections below. Remaining modules (Service Requests, Collaboration,
+Capabilities/Outcomes) come next, each additive on top of what's here.
+Full roadmap: `claude/vbp-navigator-os-v2-build-guide.md`.
 
 ## What's here
 
@@ -69,6 +69,8 @@ on real accounts, roles, and row-level tenant isolation:
    - `supabase/migrations/0003_phase2_tasks.sql`
    - `supabase/migrations/0004_phase3_pipeline.sql`
    - `supabase/migrations/0005_phase4_classes.sql`
+   - `supabase/migrations/0006_phase5_budget.sql`
+   - `supabase/migrations/0007_phase5_compensation.sql`
    (or `supabase db push` with the Supabase CLI, if you have a project linked).
 3. **Set env vars** (`.env` locally, or your host's dashboard in production) — from the Supabase project's Settings → API:
    ```
@@ -158,6 +160,49 @@ class, only that service's Service Owner/Contributor or an Org Admin
 can change its status (`supabase/migrations/0005_phase4_classes.sql` +
 `lib/permissions.ts`).
 
+## Phase 5: Budget + Compensation Earning Service
+
+`/budget` — a tabbed workspace for the full spend/revenue picture, per
+the alignment doc Section 6:
+
+- **Budget requests** — anyone can submit one (petty cash or direct,
+  tagged to a service and a purpose/amount). Approving or rejecting is
+  restricted to the org's single, org-wide **Budget Approver** role
+  (Anne at VBP) or an Org Admin, regardless of which service the
+  request is against — `lib/permissions.ts`'s `canApproveBudget`. Each
+  request can carry vendor quotations (added inline on its card).
+- **Expenses** — actual recorded spend, `serviceId`-tagged, optionally
+  linked back to the budget request it was spent against. Logging one
+  is restricted to that service's owner/contributor or an Org Admin
+  (unlike a request, this is a real cash outlay being recorded).
+- **Invoices** — both directions: **incoming** (a vendor's bill to
+  VBP) and **outgoing** (VBP billing a customer, e.g. training fees).
+  Outgoing invoices need no approval chain — this is revenue, not
+  spend, confirmed in the alignment doc. Both directions share one
+  table (`direction` column) and the same permission gate as Expenses.
+
+`/compensation` — the Compensation Earning Service, VBP's 5th Enabling
+Service and real payroll computation rather than an Expense category
+(alignment doc Section 7): Basic Pay + Allowances − Deductions = Net
+Pay, computed server-side from the org's configured statutory rates
+(`lib/payroll.ts`, a pure/testable module — see `scripts/verify-payroll.ts`
+for a hand-worked regression check you can re-run any time:
+`npx tsx scripts/verify-payroll.ts`). Rates (NSSF, WCF, PAYE brackets)
+live in `compensation_rate_configs`, one row per org, seeded with an
+**illustrative Tanzania default that still needs verifying against
+current NSSF/TRA figures before a real pay run** — there's no
+rate-editing UI yet, so adjust that table directly in SQL.
+
+Creating a draft entry is gated to the Compensation Earning Service's
+owner/contributor (Jennifer, per Section 7) or an Org Admin.
+**Finalizing** an entry is the approval step — restricted to the
+org-wide Budget Approver (Anne) or an Org Admin, same gate as approving
+a Budget Request — and it also generates a real linked Expense against
+the Compensation Earning Service, at gross pay (the organization's
+actual cash outlay, since the deduction lines are withheld and remitted
+on the employee's behalf rather than kept) — see
+`lib/db-compensation.ts`'s file comment for the reasoning.
+
 ## Deploying
 
 The app is a standard Next.js app — deploy it anywhere Next.js runs
@@ -215,6 +260,8 @@ app/
   tasks/page.tsx                — v2.0 Phase 2: the Tasks page
   pipeline/page.tsx               — v2.0 Phase 3: the Pipeline page
   classes/page.tsx                  — v2.0 Phase 4: the Classes page
+  budget/page.tsx                     — v2.0 Phase 5: the Budget page (requests/expenses/invoices)
+  compensation/page.tsx                 — v2.0 Phase 5: the Compensation Earning Service page
   api/
     findings/route.ts          — GET all findings for the caller's org (auto-seeds)
     findings/[id]/route.ts      — PATCH one finding's status/note, scoped to org
@@ -225,6 +272,14 @@ app/
     leads/[id]/route.ts                 — PATCH a lead's stage (same permission gate as tasks)
     classes/route.ts                      — GET (list, optional ?serviceId=) / POST (schedule + generate setup Tasks)
     classes/[id]/route.ts                   — PATCH a class's status (same permission gate as tasks)
+    budget-requests/route.ts                  — GET (list) / POST (submit — anyone in the org)
+    budget-requests/[id]/route.ts               — PATCH approve/reject (org-wide Budget Approver only)
+    budget-requests/[id]/quotations/route.ts      — GET/POST vendor quotations on a request
+    expenses/route.ts                               — GET (list) / POST (record spend — service owner/contributor)
+    invoices/route.ts                                 — GET (list, ?direction=) / POST (create, either direction)
+    invoices/[id]/route.ts                              — PATCH status (unpaid/paid/overdue)
+    compensation/route.ts                                 — GET (list) / POST (create draft entry, computes Net Pay)
+    compensation/[id]/route.ts                              — PATCH finalize (Budget Approver only; generates an Expense)
 components/
   NavigatorApp.tsx          — tabs, layout, all static copy for both v1.0 tabs
   InternalChain.tsx          — the internal-ops service-chain SVG diagram
@@ -237,6 +292,8 @@ components/
   tasks/                                 — v2.0 Phase 2: TaskBoard, NewTaskForm, TaskItem, types
   pipeline/                               — v2.0 Phase 3: PipelineBoard, NewLeadForm, LeadItem, types
   classes/                                  — v2.0 Phase 4: ClassBoard, NewClassForm, ClassItem (embeds the setup checklist), types
+  budget/                                     — v2.0 Phase 5: BudgetWorkspace (tabs) + Requests/Expenses/Invoices sections, types
+  compensation/                                 — v2.0 Phase 5: CompensationBoard, NewEntryForm, EntryItem (shows the full breakdown), types
 lib/
   db-driver.ts       — shared Postgres/SQLite connection setup + the RLS-vs-app-filtering note (read this first)
   db.ts                — findings data layer, now org-scoped
@@ -244,7 +301,12 @@ lib/
   db-tasks.ts               — the tasks table's data layer (also carries the optional classId link)
   db-leads.ts                 — the leads table's data layer
   db-classes.ts                 — the classes table's data layer; createClass also generates the standard setup Task[]
-  permissions.ts               — app-level role checks (mirrors the RLS policies for the DATABASE_URL code path)
+  db-budget.ts                    — budget_requests + quotations data layer; getOrgBudgetApproverId defaults a request's approver
+  db-expenses.ts                    — the expenses table's data layer
+  db-invoices.ts                      — the invoices table's data layer (both directions)
+  db-compensation.ts                    — compensation_rate_configs + compensation_entries; finalize also creates the linked Expense
+  payroll.ts                              — pure Net Pay / progressive PAYE math, no DB — see scripts/verify-payroll.ts
+  permissions.ts               — app-level role checks (mirrors the RLS policies for the DATABASE_URL code path); canApproveBudget gates Budget/Compensation approval
   findings-data.ts    — the fixed title/body copy for the 4 seeded findings
   current-org.ts        — resolves the signed-in user's org (or "local-dev" if Supabase isn't configured)
   roles.ts                — the six v2.0 role constants (see the alignment doc Section 4)
@@ -258,6 +320,8 @@ styles/
 supabase/
   migrations/           — the multi-tenant schema + RLS policies; run these against your Supabase project, in order
   seed/vbp_services.sql   — VBP's real 10-service catalog (placeholders to fill in — see "Phase 2: Tasks")
+scripts/
+  verify-payroll.ts   — standalone hand-worked regression check for lib/payroll.ts (`npx tsx scripts/verify-payroll.ts`)
 public/
   manifest.json, sw.js, icons/  — PWA shell (icons are placeholders — swap for real brand assets)
 proxy.ts    — v2.0: requires a signed-in Supabase user (Next 16's "middleware" rename)

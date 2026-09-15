@@ -77,17 +77,27 @@ Instances of Master Class Delivery; scheduling one auto-generates a linked Task[
 - [ ] Real classes against VBP's actual Master Class Delivery service once `supabase/seed/vbp_services.sql` has been run.
 - [ ] Outgoing Invoice[] linked to a Class (billing the customer org for that class) — deferred to Phase 5, per the data model diagram in the alignment doc Section 8.
 
-## Phase 5 — Budget + Compensation Earning Service
+## Phase 5 — Budget + Compensation Earning Service — done
 
-Not started. The big one — see alignment doc Sections 6–7 for full detail.
+The big one — see alignment doc Sections 6–7 for full detail.
 
-- [ ] `budget_requests`, `quotations`, `expenses`, `invoices` (with `direction: incoming|outgoing`) tables + RLS
-- [ ] Budget Approver routing (org-wide — Anne at VBP) wired to the `budget_approver` role
-- [ ] `compensation_entries` table (Basic Pay, allowances[], deductions[], computed Net Pay) + RLS
-- [ ] Statutory deduction rules as **configurable per-org** data, not hardcoded — Tanzania (NSSF, WCF, PAYE) is VBP's own config, not a global default
-- [ ] Compensation Earning Service added as a real row in `services` (owner: Jennifer, per `vbp-internal-service-architecture.md`)
-- [ ] Outgoing invoices generate against a Class/Lead with no approval step (confirmed in alignment doc)
-- [ ] Validate: a full pay period actually computes Net Pay correctly for a sample employee under Tanzania's rules
+- [x] `budget_requests`, `quotations`, `expenses`, `invoices` (with `direction: incoming|outgoing`) tables + RLS (`supabase/migrations/0006_phase5_budget.sql`). Every one of these carries a required `service_id` per the core discipline (Section 2) — Quotation is the one exception, since it's a sub-record of a Budget Request that already has one.
+- [x] Budget Approver routing (org-wide — Anne at VBP) wired to the `budget_approver` role — `lib/db-budget.ts`'s `getOrgBudgetApproverId` defaults a new request's `approverId` to whoever holds that org-wide role; `lib/permissions.ts`'s new `canApproveBudget` gates the actual approve/reject PATCH (`app/api/budget-requests/[id]/route.ts`) and doubles as the Compensation finalize gate.
+- [x] `compensation_entries` table (Basic Pay, allowances[], deductions[], computed Net Pay) + `compensation_rate_configs` (per-org statutory rates) + RLS (`supabase/migrations/0007_phase5_compensation.sql`).
+- [x] Statutory deduction rules **configurable per-org**, not hardcoded — `lib/payroll.ts` is a pure, dependency-free module (`computePaye`, `computeCompensation`) that takes a `RateConfig` as input; `lib/db-compensation.ts`'s `getRateConfig` reads an org's `compensation_rate_configs` row (auto-seeding `DEFAULT_RATE_CONFIG` on first use, same pattern as demo services). The illustrative Tanzania default rates are flagged in both files as a starting point to verify, not authoritative tax figures.
+- [x] `scripts/verify-payroll.ts` — a standalone hand-worked regression check (progressive PAYE across brackets, a full entry's gross/deductions/net) confirming the math, not just that it runs. `npx tsx scripts/verify-payroll.ts`.
+- [x] Compensation Earning Service ownership (Jennifer runs, Anne approves) modeled in permissions, not hardcoded to those two people: creating a draft entry requires managing the service (`canManageService`); finalizing requires the org-wide Budget Approver (`canApproveBudget`) — whoever holds those roles for a given tenant.
+- [x] Finalizing a compensation entry generates a real linked Expense against its own service (`lib/db-compensation.ts`'s `finalizeCompensationEntry`, calling into `lib/db-expenses.ts`) — Expense amount is gross pay (basic + allowances), the org's actual cash outlay, since the deduction lines are withheld and remitted on the employee's behalf, not kept. Documented inline as a deliberate choice, since the alignment doc's diagram doesn't spell out which figure to feed Budget.
+- [x] Outgoing invoices generate against a Class/Lead with no approval step (confirmed in alignment doc) — `invoices.class_id` / `invoices.lead_id` are both nullable FKs, `direction` decides whether an approval chain would even apply (it never does — see Section 6).
+- [x] Budget UI (`/budget` — `app/budget/page.tsx`, `components/budget/*`) — tabbed Requests / Expenses / Invoices workspace; a Budget Request card shows its quotations inline with an add-quote mini-form, and Approve/Reject buttons that only succeed for the org's Budget Approver (errors surface inline for anyone else, same UX pattern as Tasks/Leads/Classes).
+- [x] Compensation UI (`/compensation` — `app/compensation/page.tsx`, `components/compensation/*`) — a form with dynamic allowance rows, and each entry card shows the full breakdown (basic → gross → deductions → net) plus a Finalize button.
+- [x] Validate: a full pay period actually computes Net Pay correctly for a sample employee under Tanzania's rates — verified two ways: `scripts/verify-payroll.ts`'s hand-worked numbers, and a live smoke test (basicPay 1,000,000 + Housing 200,000 → gross 1,200,000, NSSF 120,000, PAYE 152,000, net 928,000 — both agree), plus confirmed finalizing generated the linked Expense at gross pay (1,200,000) and it showed up in `/api/expenses`.
+- [x] Build verified clean, local smoke test verified end-to-end: budget request created → quotation attached → approved; invalid status rejected; expense logged; outgoing and incoming invoices created, filtered by `?direction=`, marked paid; compensation draft created with correct computed deductions/net pay; finalized and confirmed the generated Expense; confirmed Tasks/Pipeline/Classes creation and their pages are unaffected by the new modules.
+
+**Not done yet:**
+- [ ] Real budget requests/expenses/invoices/compensation entries against VBP's actual service catalog and real people once `supabase/seed/vbp_services.sql` and the org bootstrap have been run.
+- [ ] A rate-editing UI for `compensation_rate_configs` — currently edited by hand in SQL, same as the services catalog before Phase 2. Worth prioritizing before this goes live, since the seeded rates are illustrative only (see `lib/payroll.ts`'s file comment).
+- [ ] Confirm current NSSF/WCF/PAYE figures with the relevant Tanzanian authorities before relying on the seeded defaults for a real pay run.
 
 ## Phase 6 — Service Requests + Collaboration
 
