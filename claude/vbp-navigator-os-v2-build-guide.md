@@ -49,12 +49,17 @@ rewrite. Per the alignment doc Section 11.
 - [ ] Diallo runs `supabase/seed/vbp_services.sql` (needs the Foundation bootstrap done first) so the real org has its actual service catalog instead of relying on local demo data.
 - [ ] Board/kanban view, if a flat list turns out to not be enough once there's real task volume.
 
-## Phase 3 — Pipeline (Leads)
+## Phase 3 — Pipeline (Leads) — done
 
-Not started. Tied to the two gap CVS (Professional Readiness Assessment, Candidate Admission) — concrete progress against Findings 3/4.
+Tied to the two gap CVS (Professional Readiness Assessment, Candidate Admission) — concrete progress against Findings 3/4.
 
-- [ ] `leads` table + RLS
-- [ ] Pipeline/stage UI
+- [x] `leads` table + RLS (`supabase/migrations/0004_phase3_pipeline.sql`) — stage enum (`new`/`contacted`/`assessed`/`admitted`/`lost`), same org/service-scoping pattern as `tasks`.
+- [x] Pipeline UI (`/pipeline` — `app/pipeline/page.tsx`, `components/pipeline/{PipelineBoard,NewLeadForm,LeadItem}.tsx`) — active vs. closed leads, stage-advance buttons. Same design-system components and permission model as Tasks (`lib/permissions.ts`'s `canManageService` is reused as-is, not duplicated).
+- [x] Deliberately no automatic service hand-off when a lead crosses from assessment to admission — that would mean hardcoding VBP-specific service ids into application logic, which breaks for a future tenant with a different catalog. Advancing a lead's owning service is a manual edit, same picker UX as choosing a task's service.
+- [x] Build verified clean, local smoke test verified end-to-end: create a lead, list leads, advance stage, confirm an invalid stage is rejected, confirm `/pipeline` renders and the nav link shows.
+
+**Not done yet:**
+- [ ] Real leads against VBP's actual Readiness Assessment / Candidate Admission services once `supabase/seed/vbp_services.sql` has been run.
 
 ## Phase 4 — Classes
 

@@ -9,15 +9,14 @@ tool) — see `claude/vbp-navigator-os-v2-alignment.md` and
 plan. This README documents both — sections below say which version they
 describe.
 
-## v2.0 status: Foundation + Phase 2 (Tasks)
+## v2.0 status: Foundation + Phase 2 (Tasks) + Phase 3 (Pipeline)
 
 Foundation (multi-tenant data model, Supabase Auth, design system core,
 PWA shell) is in — see **"v2.0 Foundation setup"** below. **Phase 2
-(Processes/Tasks)** is also in — a `/tasks` page, backed by a real
-`tasks` table, is the first working feature module; see **"Phase 2: Tasks"**
-below. Remaining modules (Pipeline, Classes, Budget, ...) come next, each
-additive on top of what's here. Full roadmap:
-`claude/vbp-navigator-os-v2-build-guide.md`.
+(Processes/Tasks)** and **Phase 3 (Pipeline/Leads)** are also in — see
+**"Phase 2: Tasks"** and **"Phase 3: Pipeline"** below. Remaining modules
+(Classes, Budget, ...) come next, each additive on top of what's here.
+Full roadmap: `claude/vbp-navigator-os-v2-build-guide.md`.
 
 ## What's here
 
@@ -110,6 +109,23 @@ on real accounts, roles, and row-level tenant isolation:
   mirrored in the RLS policy for anyone querying via the Supabase client
   directly.
 
+## Phase 3: Pipeline
+
+`/pipeline` — leads move through `new → contacted → assessed → admitted`
+(or `lost` at any point before `admitted`). Tied to the two currently
+unowned CVS from `vbp-internal-service-architecture.md` (Professional
+Readiness Assessment, Candidate Admission) — a lead's `serviceId` says
+which of those (or any service) currently owns it; moving a lead from
+assessment to admission is a matter of creating/editing which service it
+points at, the same picker pattern as Tasks. No automatic service
+hand-off is built in on purpose — hardcoding "assessment's service id
+becomes admission's service id" would only work for VBP's specific
+catalog and breaks the moment another tenant has different service ids.
+
+Same permission shape as Tasks: anyone can log a lead, only that
+service's Service Owner/Contributor or an Org Admin can advance its
+stage (`supabase/migrations/0004_phase3_pipeline.sql` + `lib/permissions.ts`).
+
 ## Deploying
 
 The app is a standard Next.js app — deploy it anywhere Next.js runs
@@ -165,12 +181,15 @@ app/
   login/page.tsx             — v2.0: Supabase email/password sign-in
   auth/signout/route.ts       — v2.0: signs out, redirects to /login
   tasks/page.tsx                — v2.0 Phase 2: the Tasks page
+  pipeline/page.tsx               — v2.0 Phase 3: the Pipeline page
   api/
     findings/route.ts          — GET all findings for the caller's org (auto-seeds)
     findings/[id]/route.ts      — PATCH one finding's status/note, scoped to org
     services/route.ts            — GET the caller's org's service catalog
     tasks/route.ts                 — GET (list, optional ?serviceId=) / POST (create) tasks
     tasks/[id]/route.ts              — PATCH a task's status (Service Owner/Contributor/Org Admin only)
+    leads/route.ts                    — GET (list, optional ?serviceId=) / POST (create) leads
+    leads/[id]/route.ts                 — PATCH a lead's stage (same permission gate as tasks)
 components/
   NavigatorApp.tsx          — tabs, layout, all static copy for both v1.0 tabs
   InternalChain.tsx          — the internal-ops service-chain SVG diagram
@@ -181,11 +200,13 @@ components/
   ServiceWorkerRegister.tsx           — v2.0: registers the PWA service worker
   ui/                                  — v2.0 design system components (Button, Card, Badge, Input, VersionBadge, TopNav)
   tasks/                                 — v2.0 Phase 2: TaskBoard, NewTaskForm, TaskItem, types
+  pipeline/                               — v2.0 Phase 3: PipelineBoard, NewLeadForm, LeadItem, types
 lib/
   db-driver.ts       — shared Postgres/SQLite connection setup + the RLS-vs-app-filtering note (read this first)
   db.ts                — findings data layer, now org-scoped
   db-services.ts         — read access to the services table (+ local-dev demo seed)
   db-tasks.ts               — the tasks table's data layer
+  db-leads.ts                 — the leads table's data layer
   permissions.ts               — app-level role checks (mirrors the RLS policies for the DATABASE_URL code path)
   findings-data.ts    — the fixed title/body copy for the 4 seeded findings
   current-org.ts        — resolves the signed-in user's org (or "local-dev" if Supabase isn't configured)

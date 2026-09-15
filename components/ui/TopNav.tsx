@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const LINKS = [
   { href: "/", label: "Service Architecture" },
   { href: "/tasks", label: "Tasks" },
+  { href: "/pipeline", label: "Pipeline" },
 ];
 
 // Minimal top nav so v2.0's new modules (starting with Tasks) are
