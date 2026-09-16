@@ -15,8 +15,6 @@ export function NewTaskForm({
   const [serviceId, setServiceId] = useState("");
   const [title, setTitle] = useState("");
   const [assigneeName, setAssigneeName] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [dueDate, setDueDate] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -28,7 +26,7 @@ export function NewTaskForm({
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceId, title, assigneeName, startDate, dueDate }),
+        body: JSON.stringify({ serviceId, title, assigneeName }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -38,8 +36,6 @@ export function NewTaskForm({
       onCreated(task);
       setTitle("");
       setAssigneeName("");
-      setStartDate("");
-      setDueDate("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't create task");
     } finally {
@@ -78,15 +74,7 @@ export function NewTaskForm({
         onChange={(e) => setAssigneeName(e.target.value)}
         style={{ flex: "1 1 160px" }}
       />
-      <label style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: "0.75rem", color: "var(--v2-text-muted)" }}>
-        Start (optional)
-        <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ width: 150 }} />
-      </label>
-      <label style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: "0.75rem", color: "var(--v2-text-muted)" }}>
-        Due (optional)
-        <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ width: 150 }} />
-      </label>
-      <Button type="submit" loading={busy} disabled={!serviceId || !title.trim()} style={{ alignSelf: "flex-end" }}>
+      <Button type="submit" disabled={busy || !serviceId || !title.trim()}>
         {busy ? "Adding…" : "Add task"}
       </Button>
       {error && <p style={{ color: "var(--v2-danger)", width: "100%", margin: 0 }}>{error}</p>}

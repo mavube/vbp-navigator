@@ -1,41 +1,27 @@
 /* v2.0 core components — small, composable, token-driven. Keep this
-   file focused on primitives every feature module reuses; module-
-   specific styling belongs with that module, not here.
-
-   Redesigned 2026-09-16 (Phase 1, design-system pass) alongside
-   design-tokens.css — every value below reads from a token, so no
-   feature module needed to change for this pass to reach it. */
-
-* { box-sizing: border-box; }
+   file focused on the handful of primitives (button, card, badge,
+   input) every feature module will reuse; module-specific styling
+   belongs with that module, not here. */
 
 .v2-btn {
   font-family: var(--v2-font);
-  font-size: var(--v2-text-sm);
-  font-weight: var(--v2-weight-semibold);
-  padding: 9px var(--v2-space-4);
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: var(--v2-space-2) var(--v2-space-4);
   border-radius: var(--v2-radius-sm);
   border: 1px solid transparent;
   cursor: pointer;
-  transition: background-color var(--v2-transition), border-color var(--v2-transition),
-    box-shadow var(--v2-transition), transform var(--v2-transition);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 .v2-btn:disabled { opacity: 0.5; cursor: default; }
-.v2-btn:active:not(:disabled) { transform: translateY(1px); }
-.v2-btn:focus-visible { outline: 2px solid var(--v2-accent); outline-offset: 2px; }
-
-.v2-btn-primary {
-  background: var(--v2-accent);
-  color: #fff;
-  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.25);
-}
+.v2-btn-primary { background: var(--v2-accent); color: #fff; }
 .v2-btn-primary:hover:not(:disabled) { background: var(--v2-accent-hover); }
-
 .v2-btn-secondary {
   background: var(--v2-surface);
   color: var(--v2-text);
   border-color: var(--v2-border-strong);
 }
-.v2-btn-secondary:hover:not(:disabled) { background: var(--v2-surface-sunken); }
+.v2-btn-secondary:hover:not(:disabled) { background: var(--v2-bg); }
 
 .v2-card {
   background: var(--v2-surface);
@@ -48,14 +34,15 @@
 .v2-badge {
   display: inline-flex;
   align-items: center;
-  font-family: var(--v2-font);
-  font-size: var(--v2-text-xs);
-  letter-spacing: 0.01em;
-  padding: 3px var(--v2-space-2);
+  font-family: var(--v2-font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 2px var(--v2-space-2);
   border-radius: 999px;
-  font-weight: var(--v2-weight-semibold);
+  font-weight: 600;
 }
-.v2-badge-neutral { background: var(--v2-surface-sunken); color: var(--v2-text-muted); border: 1px solid var(--v2-border); }
+.v2-badge-neutral { background: var(--v2-bg); color: var(--v2-text-muted); border: 1px solid var(--v2-border); }
 .v2-badge-accent { background: var(--v2-accent-soft); color: var(--v2-accent); }
 .v2-badge-success { background: var(--v2-success-soft); color: var(--v2-success); }
 .v2-badge-warning { background: var(--v2-warning-soft); color: var(--v2-warning); }
@@ -63,21 +50,15 @@
 
 .v2-input {
   font-family: var(--v2-font);
-  font-size: var(--v2-text-base);
+  font-size: 0.9rem;
   color: var(--v2-text);
   background: var(--v2-surface);
   border: 1px solid var(--v2-border-strong);
   border-radius: var(--v2-radius-sm);
-  padding: 9px var(--v2-space-3);
+  padding: var(--v2-space-2) var(--v2-space-3);
   width: 100%;
-  transition: border-color var(--v2-transition), box-shadow var(--v2-transition);
 }
-.v2-input::placeholder { color: var(--v2-text-faint); }
-.v2-input:focus-visible {
-  outline: none;
-  border-color: var(--v2-accent);
-  box-shadow: 0 0 0 3px var(--v2-accent-soft);
-}
+.v2-input:focus-visible { outline: 2px solid var(--v2-accent); outline-offset: 1px; }
 
 .v2-version-badge {
   position: fixed;
@@ -93,439 +74,4 @@
   border-radius: 999px;
   padding: 3px 10px;
   pointer-events: none;
-}
-
-/* ---------------------------------------------------------- page shell */
-/* One shared layout wrapper (components/ui/Page.tsx) so every module
-   page stops repeating its own inline maxWidth/padding/h1/p markup —
-   a single place to keep the "premium, consistent, generous
-   whitespace" direction true everywhere at once. */
-
-.v2-page-shell {
-  max-width: var(--v2-container);
-  margin: 0 auto;
-  padding: var(--v2-space-10) var(--v2-space-6) var(--v2-space-10);
-  width: 100%;
-  font-family: var(--v2-font);
-  color: var(--v2-text);
-}
-.v2-page-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--v2-space-4);
-  flex-wrap: wrap;
-  margin-bottom: var(--v2-space-8);
-}
-.v2-page-header-text h1 {
-  font-family: var(--v2-font);
-  font-size: var(--v2-text-3xl);
-  font-weight: var(--v2-weight-semibold);
-  color: var(--v2-text);
-  letter-spacing: -0.02em;
-  margin: 0 0 6px;
-}
-.v2-page-header-text p {
-  font-family: var(--v2-font);
-  font-size: var(--v2-text-base);
-  color: var(--v2-text-muted);
-  max-width: 640px;
-  line-height: 1.55;
-  margin: 0;
-}
-.v2-page-header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--v2-space-2);
-  flex-shrink: 0;
-}
-@media (max-width: 640px) {
-  .v2-page-shell { padding: var(--v2-space-6) var(--v2-space-4) var(--v2-space-8); }
-  .v2-page-header-text h1 { font-size: var(--v2-text-2xl); }
-  /* A section-head actions block that wraps onto its own row (multiple
-     buttons, e.g. the Tasks work-view switcher) otherwise keeps
-     shrink-to-fit width and never actually wraps its own children —
-     the classic flex-wrap pitfall. Forcing it to the row's full width
-     here gives its buttons something to wrap against. */
-  .v2-section-actions { width: 100%; }
-}
-
-/* -------------------------------------------------------- app shell */
-/* v3.0 Phase 6a (UI/UX modernization). Replaces the old single
-   top-of-page nav bar — every module link crowded into one horizontal
-   row that wrapped onto a second line at desktop width once Documents
-   became the 11th link — with a persistent, grouped side bar plus a
-   dedicated content column. This is the "sidebars" half of "best
-   layouts, cards, side bars and sections"; .v2-section below is the
-   "sections" half. */
-
-.v2-shell {
-  display: flex;
-  min-height: 100dvh;
-  background: var(--v2-bg);
-  align-items: flex-start;
-}
-.v2-shell-main {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.v2-sidebar {
-  width: 252px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  height: 100dvh;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--v2-space-6);
-  background: var(--v2-surface);
-  border-right: 1px solid var(--v2-border);
-  padding: var(--v2-space-6) var(--v2-space-4);
-  z-index: 30;
-}
-.v2-sidebar-brand {
-  display: block;
-  font-family: var(--v2-font);
-  font-weight: var(--v2-weight-bold);
-  font-size: var(--v2-text-lg);
-  color: var(--v2-text);
-  text-decoration: none;
-  letter-spacing: -0.01em;
-  padding: 0 var(--v2-space-3);
-}
-.v2-sidebar-brand span { color: var(--v2-accent); font-weight: var(--v2-weight-semibold); }
-
-.v2-sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  gap: var(--v2-space-5);
-  overflow-y: auto;
-}
-.v2-sidebar-group { display: flex; flex-direction: column; gap: 1px; }
-.v2-sidebar-group-label {
-  font-family: var(--v2-font);
-  font-size: 0.6875rem;
-  font-weight: var(--v2-weight-bold);
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--v2-text-faint);
-  margin: 0 var(--v2-space-3) 6px;
-}
-.v2-sidebar-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-family: var(--v2-font);
-  font-size: var(--v2-text-sm);
-  font-weight: var(--v2-weight-medium);
-  color: var(--v2-text-muted);
-  text-decoration: none;
-  padding: 8px var(--v2-space-3);
-  border-radius: var(--v2-radius-sm);
-  transition: background-color var(--v2-transition), color var(--v2-transition);
-}
-.v2-sidebar-link:hover { color: var(--v2-text); background: var(--v2-surface-sunken); }
-.v2-sidebar-link-active { color: var(--v2-accent); background: var(--v2-accent-soft); font-weight: var(--v2-weight-semibold); }
-.v2-sidebar-icon { flex-shrink: 0; opacity: 0.85; }
-.v2-sidebar-link-active .v2-sidebar-icon { opacity: 1; }
-
-.v2-sidebar-backdrop { display: none; }
-
-.v2-mobilebar {
-  display: none;
-  position: sticky;
-  top: 0;
-  z-index: 40;
-  align-items: center;
-  gap: var(--v2-space-3);
-  background: rgba(255, 255, 255, 0.86);
-  backdrop-filter: saturate(180%) blur(12px);
-  -webkit-backdrop-filter: saturate(180%) blur(12px);
-  border-bottom: 1px solid var(--v2-border);
-  padding: var(--v2-space-3) var(--v2-space-4);
-}
-:root[data-theme="dark"] .v2-mobilebar { background: rgba(11, 13, 18, 0.86); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .v2-mobilebar { background: rgba(11, 13, 18, 0.86); }
-}
-.v2-mobilebar-toggle {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--v2-radius-sm);
-  border: 1px solid var(--v2-border);
-  background: var(--v2-surface);
-  color: var(--v2-text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.v2-mobilebar-brand {
-  font-family: var(--v2-font);
-  font-weight: var(--v2-weight-bold);
-  font-size: var(--v2-text-base);
-  color: var(--v2-text);
-  text-decoration: none;
-  letter-spacing: -0.01em;
-}
-.v2-mobilebar-brand span { color: var(--v2-accent); font-weight: var(--v2-weight-semibold); }
-
-@media (max-width: 960px) {
-  /* .v2-mobilebar is a flow sibling of .v2-shell-main inside .v2-shell
-     (a flex row) — .v2-sidebar and its backdrop go position:fixed
-     below and drop out of that row entirely, but the mobilebar is
-     sticky (still in-flow) and, with no explicit width, was sizing
-     itself to its content (~160px) as a flex item sitting *beside*
-     .v2-shell-main instead of a full-width bar *above* it — the real
-     cause of the cramped mobile content column this whole @media
-     block otherwise looks correct for. Forcing it to a 100% flex
-     basis on a wrapping shell puts it on its own full-width row and
-     lets .v2-shell-main have the entire next row to itself. */
-  .v2-shell { flex-wrap: wrap; }
-  .v2-mobilebar { display: flex; flex: 1 1 100%; }
-  .v2-shell-main { flex: 1 1 100%; }
-  .v2-sidebar {
-    position: fixed;
-    inset: 0 auto 0 0;
-    width: 280px;
-    transform: translateX(-100%);
-    transition: transform var(--v2-transition);
-    box-shadow: var(--v2-shadow-lg);
-    z-index: 50;
-  }
-  .v2-sidebar-open { transform: translateX(0); }
-  .v2-sidebar-backdrop {
-    display: block;
-    position: fixed;
-    inset: 0;
-    background: rgba(15, 23, 42, 0.45);
-    z-index: 45;
-  }
-}
-
-/* ----------------------------------------------------------- section */
-/* A titled, card-framed content grouping — the "sections" requested
-   alongside sidebars. Module workspaces (Documents, Architecture, …)
-   use this to break a long scroll into clearly labeled, self-contained
-   blocks instead of ad hoc h2-plus-div headings. */
-
-.v2-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--v2-space-4);
-  background: var(--v2-surface);
-  border: 1px solid var(--v2-border);
-  border-radius: var(--v2-radius-lg);
-  box-shadow: var(--v2-shadow-sm);
-  padding: var(--v2-space-6);
-}
-.v2-section-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--v2-space-4);
-  flex-wrap: wrap;
-}
-.v2-section-title {
-  font-family: var(--v2-font);
-  font-size: var(--v2-text-lg);
-  font-weight: var(--v2-weight-semibold);
-  color: var(--v2-text);
-  letter-spacing: -0.01em;
-  margin: 0 0 4px;
-}
-.v2-section-description {
-  font-family: var(--v2-font);
-  font-size: var(--v2-text-sm);
-  color: var(--v2-text-muted);
-  max-width: 640px;
-  line-height: 1.5;
-  margin: 0;
-}
-.v2-section-actions { display: flex; align-items: center; gap: var(--v2-space-2); flex-shrink: 0; flex-wrap: wrap; }
-.v2-section-body { display: flex; flex-direction: column; gap: var(--v2-space-4); }
-
-/* ------------------------------------------------------------ kanban */
-/* v3.0 Phase 6 — the Tasks module's Kanban work view
-   (components/tasks/TaskKanban.tsx). Three columns side by side reads
-   fine at desktop width; at phone width three columns of real content
-   just overlap unreadably (the same "don't just shrink the desktop UI"
-   problem the sidebar's own mobile drawer exists to avoid), so this
-   collapses to one column per row below the breakpoint. */
-.v2-kanban-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--v2-space-4);
-}
-@media (max-width: 720px) {
-  .v2-kanban-grid { grid-template-columns: 1fr; }
-}
-
-/* -------------------------------------------------------------- login */
-/* Was v1.0's legacy .login-wrap/.login-card (app/globals.css), styled
-   off the "blueprint" token set. Rebuilt on v2.0 tokens using the
-   existing Input/Button primitives, since sign-in is most people's
-   first impression of the product. The old classes are left in place,
-   unused, rather than deleted — app/globals.css also still styles the
-   live v1.0 Service Architecture page and isn't worth touching twice. */
-
-.v2-login-wrap {
-  min-height: 100dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--v2-bg);
-  padding: var(--v2-space-4);
-}
-.v2-login-card {
-  width: 100%;
-  max-width: 380px;
-  background: var(--v2-surface);
-  border: 1px solid var(--v2-border);
-  border-radius: var(--v2-radius-lg);
-  box-shadow: var(--v2-shadow-md);
-  padding: var(--v2-space-8) var(--v2-space-6);
-  display: flex;
-  flex-direction: column;
-  gap: var(--v2-space-3);
-}
-.v2-login-card h1 {
-  font-family: var(--v2-font);
-  font-size: var(--v2-text-xl);
-  font-weight: var(--v2-weight-bold);
-  color: var(--v2-text);
-  margin: 0;
-  letter-spacing: -0.01em;
-}
-.v2-login-card > p {
-  font-family: var(--v2-font);
-  font-size: var(--v2-text-sm);
-  color: var(--v2-text-muted);
-  margin: 0 0 var(--v2-space-2);
-}
-.v2-login-error {
-  font-family: var(--v2-font);
-  color: var(--v2-danger);
-  font-size: var(--v2-text-sm);
-  background: var(--v2-danger-soft);
-  border-radius: var(--v2-radius-sm);
-  padding: var(--v2-space-2) var(--v2-space-3);
-  margin: 0;
-}
-
-/* ------------------------------------------------------- public pages */
-/* v3.0 roadmap Phase 4 — the unauthenticated /apply and /assess entry
-   points. No TopNav here (see components/ui/TopNav.tsx — it hides
-   itself on these routes), so this brings its own minimal brand mark.
-   Deliberately its own small set of classes rather than reusing
-   .v2-login-*: a public applicant's form has more fields and needs
-   room to breathe, and keeping it separate means a future change to
-   the login card can't accidentally affect the public intake forms. */
-
-.v2-public-wrap {
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  background: var(--v2-bg);
-  padding: var(--v2-space-8) var(--v2-space-4);
-}
-.v2-public-card {
-  width: 100%;
-  max-width: 560px;
-  background: var(--v2-surface);
-  border: 1px solid var(--v2-border);
-  border-radius: var(--v2-radius-lg);
-  box-shadow: var(--v2-shadow-md);
-  padding: var(--v2-space-8) var(--v2-space-6);
-}
-.v2-public-brand {
-  display: block;
-  font-family: var(--v2-font);
-  font-weight: var(--v2-weight-bold);
-  font-size: var(--v2-text-lg);
-  color: var(--v2-text);
-  text-decoration: none;
-  margin-bottom: var(--v2-space-6);
-  letter-spacing: -0.01em;
-}
-.v2-public-brand span { color: var(--v2-accent); font-weight: var(--v2-weight-semibold); }
-.v2-public-card h1 {
-  font-family: var(--v2-font);
-  font-size: var(--v2-text-xl);
-  font-weight: var(--v2-weight-bold);
-  color: var(--v2-text);
-  margin: 0 0 6px;
-  letter-spacing: -0.01em;
-}
-.v2-public-card > p.v2-public-intro {
-  font-family: var(--v2-font);
-  font-size: var(--v2-text-sm);
-  color: var(--v2-text-muted);
-  margin: 0 0 var(--v2-space-6);
-  line-height: 1.55;
-}
-.v2-public-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--v2-space-4); }
-.v2-public-field label { font-size: var(--v2-text-sm); font-weight: var(--v2-weight-medium); color: var(--v2-text); }
-.v2-public-hint { font-size: var(--v2-text-xs); color: var(--v2-text-faint); margin: 4px 0 0; }
-.v2-public-success {
-  text-align: center;
-  padding: var(--v2-space-6) 0;
-}
-.v2-public-success h1 { margin-bottom: var(--v2-space-2); }
-.v2-public-success p { color: var(--v2-text-muted); font-size: var(--v2-text-sm); }
-
-/* ------------------------------------------------- responsiveness pass */
-/* Nav-transition progress bar (NavProgress.tsx) — immediate feedback on
-   any sidebar link click, independent of how long the actual network
-   round trip to a distant region takes. Indeterminate slide rather than
-   a simulated percentage, since there's no reliable "% done" signal
-   available from a client component watching App Router navigation. */
-.v2-nav-progress {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  z-index: 200;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
-}
-.v2-nav-progress-active { opacity: 1; }
-.v2-nav-progress::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -35%;
-  height: 100%;
-  width: 35%;
-  background: var(--v2-accent);
-  border-radius: 0 2px 2px 0;
-  animation: v2-nav-progress-slide 1.1s ease-in-out infinite;
-}
-.v2-nav-progress-active::before { animation-play-state: running; }
-.v2-nav-progress:not(.v2-nav-progress-active)::before { animation-play-state: paused; }
-@keyframes v2-nav-progress-slide {
-  0% { left: -35%; }
-  100% { left: 100%; }
-}
-
-/* Busy-button state — an action button shows this the instant it's
-   clicked (synchronous state update, not waiting on the network), so a
-   click always has an immediate visual response even on a slow or
-   distant connection. Applied alongside the existing .v2-btn classes. */
-.v2-btn[disabled] { opacity: 0.7; cursor: default; }
-.v2-btn-busy { display: inline-flex; align-items: center; gap: 6px; }
-.v2-spinner { animation: v2-spin 0.7s linear infinite; }
-@keyframes v2-spin {
-  to { transform: rotate(360deg); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .v2-nav-progress::before { animation: none; left: 0; width: 100%; }
-  .v2-spinner { animation: none; }
 }

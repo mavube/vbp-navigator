@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Spinner } from "@/components/ui/Spinner";
 import type { CompensationEntry } from "@/components/compensation/types";
 
 export function EntryItem({
@@ -22,21 +21,18 @@ export function EntryItem({
   async function finalize() {
     setBusy(true);
     setError("");
-    try {
-      const res = await fetch(`/api/compensation/${entry.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "finalized" }),
-      });
-      if (res.ok) {
-        onFinalized(await res.json());
-      } else {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error || "Couldn't finalize entry");
-      }
-    } finally {
-      setBusy(false);
+    const res = await fetch(`/api/compensation/${entry.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "finalized" }),
+    });
+    if (res.ok) {
+      onFinalized(await res.json());
+    } else {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error || "Couldn't finalize entry");
     }
+    setBusy(false);
   }
 
   return (
@@ -51,14 +47,7 @@ export function EntryItem({
         <div style={{ display: "flex", gap: "var(--v2-space-2)", alignItems: "center" }}>
           <Badge tone={entry.status === "finalized" ? "success" : "neutral"}>{entry.status}</Badge>
           {entry.status === "draft" && (
-            <button
-              type="button"
-              onClick={finalize}
-              disabled={busy}
-              className={`v2-btn v2-btn-secondary ${busy ? "v2-btn-busy" : ""}`}
-              style={{ padding: "4px 10px", fontSize: "0.75rem" }}
-            >
-              {busy && <Spinner size={11} />}
+            <button type="button" onClick={finalize} disabled={busy} className="v2-btn v2-btn-secondary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
               {busy ? "Finalizing…" : "Finalize"}
             </button>
           )}

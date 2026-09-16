@@ -4,10 +4,10 @@ import "@/styles/design-tokens.css";
 import "@/styles/components.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { VersionBadge } from "@/components/ui/VersionBadge";
-import { AppShell } from "@/components/ui/AppShell";
+import { TopNav } from "@/components/ui/TopNav";
 
 export const metadata: Metadata = {
-  title: "VBP Navigator OS ",
+  title: "VBP Navigator OS",
   description:
     "Service management on the ValueBlueprint® method — Service & Value Architecture, tasks, pipeline, budget, and more.",
   manifest: "/manifest.json",
@@ -27,7 +27,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AppShell>{children}</AppShell>
+        <TopNav />
+        {children}
         <VersionBadge />
         <ServiceWorkerRegister />
       </body>

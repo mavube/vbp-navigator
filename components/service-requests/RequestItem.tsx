@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Spinner } from "@/components/ui/Spinner";
 import { CommentThread } from "@/components/collaboration/CommentThread";
 import type { ServiceRequest, RequestStatus } from "@/components/service-requests/types";
 
@@ -31,25 +30,19 @@ export function RequestItem({
   onStatusChange: (status: RequestStatus) => void;
 }) {
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
 
   async function setStatus(status: RequestStatus) {
     setError("");
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/service-requests/${request.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (res.ok) {
-        onStatusChange(status);
-      } else {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error || "Couldn't update status");
-      }
-    } finally {
-      setBusy(false);
+    const res = await fetch(`/api/service-requests/${request.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) {
+      onStatusChange(status);
+    } else {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error || "Couldn't update status");
     }
   }
 
@@ -69,15 +62,8 @@ export function RequestItem({
           <Badge tone={PRIORITY_TONE[request.priority]}>{request.priority}</Badge>
           <Badge tone={STATUS_TONE[request.status]}>{request.status.replace("_", " ")}</Badge>
           {nextStatus && (
-            <button
-              type="button"
-              onClick={() => setStatus(nextStatus)}
-              disabled={busy}
-              className={`v2-btn v2-btn-secondary ${busy ? "v2-btn-busy" : ""}`}
-              style={{ padding: "4px 10px", fontSize: "0.75rem" }}
-            >
-              {busy && <Spinner size={11} />}
-              {busy ? "Marking…" : `Mark ${nextStatus.replace("_", " ")}`}
+            <button type="button" onClick={() => setStatus(nextStatus)} className="v2-btn v2-btn-secondary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
+              Mark {nextStatus.replace("_", " ")}
             </button>
           )}
         </div>

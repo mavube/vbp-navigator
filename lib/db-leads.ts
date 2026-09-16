@@ -134,28 +134,6 @@ export async function createLead(orgId: string, input: NewLead): Promise<LeadRow
   };
 }
 
-// Full lead row, not just its service id — needed by the v3.0 Phase 4
-// admission-conversion path (lib/db-engagements.ts's admitLead) to pull
-// the contact's name/email/phone across into a Customer.
-export async function getLead(orgId: string, id: string): Promise<LeadRow | null> {
-  await ensureSchema();
-  if (IS_POSTGRES) {
-    const res = await (await getPgPool()).query(
-      `SELECT id, service_id AS "serviceId", contact_name AS "contactName",
-              contact_email AS "contactEmail", contact_phone AS "contactPhone",
-              stage, owner_id AS "ownerId", notes,
-              created_at AS "createdAt", updated_at AS "updatedAt"
-       FROM leads WHERE org_id = $1 AND id = $2`,
-      [orgId, id]
-    );
-    return res.rows[0] ?? null;
-  }
-  const row = (await getSqliteDb()).prepare(`SELECT * FROM leads WHERE org_id = ? AND id = ?`).get(orgId, id) as
-    | Record<string, unknown>
-    | undefined;
-  return row ? fromSqliteRow(row) : null;
-}
-
 export async function getLeadServiceId(orgId: string, id: string): Promise<string | null> {
   await ensureSchema();
   if (IS_POSTGRES) {

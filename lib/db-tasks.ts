@@ -19,7 +19,6 @@ export interface TaskRow {
   status: TaskStatus;
   assigneeId: string | null;
   assigneeName: string;
-  startDate: string | null;
   dueDate: string | null;
   dependencies: string[];
   createdAt: string;
@@ -33,7 +32,6 @@ export interface NewTask {
   description?: string;
   assigneeId?: string | null;
   assigneeName?: string;
-  startDate?: string | null;
   dueDate?: string | null;
   dependencies?: string[];
 }
@@ -55,26 +53,22 @@ function ensureSchema(): Promise<void> {
         status TEXT NOT NULL DEFAULT 'open',
         assignee_id TEXT,
         assignee_name TEXT NOT NULL DEFAULT '',
-        start_date TEXT,
         due_date TEXT,
         dependencies TEXT NOT NULL DEFAULT '[]',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )`);
-      // class_id (Phase 4), assignee_name (Phase 7), and start_date
-      // (Phase 6 of v3.0) were all added after this table first shipped
-      // — existing local dev.db files predate them, so add each
-      // defensively rather than requiring a fresh dev.db (mirrors the
-      // Postgres migrations' `add column if not exists`).
+      // class_id (Phase 4) and assignee_name (Phase 7) were added after
+      // this table first shipped — existing local dev.db files predate
+      // them, so add both defensively rather than requiring a fresh
+      // dev.db (mirrors the Postgres migrations' `add column if not
+      // exists`).
       const cols = db.prepare(`PRAGMA table_info(tasks)`).all() as Array<{ name: string }>;
       if (!cols.some((c) => c.name === "class_id")) {
         db.exec(`ALTER TABLE tasks ADD COLUMN class_id TEXT`);
       }
       if (!cols.some((c) => c.name === "assignee_name")) {
         db.exec(`ALTER TABLE tasks ADD COLUMN assignee_name TEXT NOT NULL DEFAULT ''`);
-      }
-      if (!cols.some((c) => c.name === "start_date")) {
-        db.exec(`ALTER TABLE tasks ADD COLUMN start_date TEXT`);
       }
     })();
   }
@@ -91,7 +85,6 @@ function fromSqliteRow(row: Record<string, unknown>): TaskRow {
     status: row.status as TaskStatus,
     assigneeId: (row.assignee_id as string) ?? null,
     assigneeName: (row.assignee_name as string) ?? "",
-    startDate: (row.start_date as string) ?? null,
     dueDate: (row.due_date as string) ?? null,
     dependencies: JSON.parse((row.dependencies as string) || "[]"),
     createdAt: row.created_at as string,
@@ -102,8 +95,7 @@ function fromSqliteRow(row: Record<string, unknown>): TaskRow {
 export async function listTasks(orgId: string, serviceId?: string, classId?: string): Promise<TaskRow[]> {
   await ensureSchema();
   const cols = `id, service_id AS "serviceId", class_id AS "classId", title, description, status,
-                  assignee_id AS "assigneeId", assignee_name AS "assigneeName",
-                  start_date AS "startDate", due_date AS "dueDate", dependencies,
+                  assignee_id AS "assigneeId", assignee_name AS "assigneeName", due_date AS "dueDate", dependencies,
                   created_at AS "createdAt", updated_at AS "updatedAt"`;
   if (IS_POSTGRES) {
     const res = classId
@@ -138,24 +130,23 @@ export async function createTask(orgId: string, input: NewTask): Promise<TaskRow
   const description = input.description ?? "";
   const assigneeId = input.assigneeId ?? null;
   const assigneeName = input.assigneeName ?? "";
-  const startDate = input.startDate ?? null;
   const dueDate = input.dueDate ?? null;
   const dependencies = input.dependencies ?? [];
   const classId = input.classId ?? null;
 
   if (IS_POSTGRES) {
     await (await getPgPool()).query(
-      `INSERT INTO tasks (id, org_id, service_id, class_id, title, description, status, assignee_id, assignee_name, start_date, due_date, dependencies, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,'open',$7,$8,$9,$10,$11,$12,$12)`,
-      [id, orgId, input.serviceId, classId, input.title, description, assigneeId, assigneeName, startDate, dueDate, dependencies, now]
+      `INSERT INTO tasks (id, org_id, service_id, class_id, title, description, status, assignee_id, assignee_name, due_date, dependencies, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,'open',$7,$8,$9,$10,$11,$11)`,
+      [id, orgId, input.serviceId, classId, input.title, description, assigneeId, assigneeName, dueDate, dependencies, now]
     );
   } else {
     (await getSqliteDb())
       .prepare(
-        `INSERT INTO tasks (id, org_id, service_id, class_id, title, description, status, assignee_id, assignee_name, start_date, due_date, dependencies, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,'open',?,?,?,?,?,?,?)`
+        `INSERT INTO tasks (id, org_id, service_id, class_id, title, description, status, assignee_id, assignee_name, due_date, dependencies, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,'open',?,?,?,?,?,?)`
       )
-      .run(id, orgId, input.serviceId, classId, input.title, description, assigneeId, assigneeName, startDate, dueDate, JSON.stringify(dependencies), now, now);
+      .run(id, orgId, input.serviceId, classId, input.title, description, assigneeId, assigneeName, dueDate, JSON.stringify(dependencies), now, now);
   }
 
   return {
@@ -167,7 +158,6 @@ export async function createTask(orgId: string, input: NewTask): Promise<TaskRow
     status: "open",
     assigneeId,
     assigneeName,
-    startDate,
     dueDate,
     dependencies,
     createdAt: now,
@@ -202,67 +192,6 @@ export async function updateTaskStatus(orgId: string, id: string, status: TaskSt
     (await getSqliteDb())
       .prepare(`UPDATE tasks SET status = ?, updated_at = ? WHERE org_id = ? AND id = ?`)
       .run(status, now, orgId, id);
-  }
-}
-
-// Phase 6 of v3.0 — Gantt/Calendar need a way to set/edit a task's
-// dates after creation, not just at creation time (NewTaskForm already
-// collects them, but a task made before this phase — or made without
-// dates — needs an editing path too). Separate from updateTaskStatus
-// rather than folded into one "updateTask" with every field optional,
-// since the two are gated by the same permission check but triggered
-// from different UI (status buttons vs. a small date-edit form) and
-// keeping them distinct keeps each call site simple about what it's
-// asking for.
-export async function updateTaskDates(
-  orgId: string,
-  id: string,
-  dates: { startDate?: string | null; dueDate?: string | null }
-): Promise<void> {
-  await ensureSchema();
-  const now = new Date().toISOString();
-  const setStart = dates.startDate !== undefined;
-  const setDue = dates.dueDate !== undefined;
-  if (!setStart && !setDue) return;
-
-  if (IS_POSTGRES) {
-    const pool = await getPgPool();
-    if (setStart && setDue) {
-      await pool.query(
-        `UPDATE tasks SET start_date = $1, due_date = $2, updated_at = $3 WHERE org_id = $4 AND id = $5`,
-        [dates.startDate, dates.dueDate, now, orgId, id]
-      );
-    } else if (setStart) {
-      await pool.query(`UPDATE tasks SET start_date = $1, updated_at = $2 WHERE org_id = $3 AND id = $4`, [
-        dates.startDate,
-        now,
-        orgId,
-        id,
-      ]);
-    } else {
-      await pool.query(`UPDATE tasks SET due_date = $1, updated_at = $2 WHERE org_id = $3 AND id = $4`, [
-        dates.dueDate,
-        now,
-        orgId,
-        id,
-      ]);
-    }
-    return;
-  }
-
-  const db = await getSqliteDb();
-  if (setStart && setDue) {
-    db.prepare(`UPDATE tasks SET start_date = ?, due_date = ?, updated_at = ? WHERE org_id = ? AND id = ?`).run(
-      dates.startDate,
-      dates.dueDate,
-      now,
-      orgId,
-      id
-    );
-  } else if (setStart) {
-    db.prepare(`UPDATE tasks SET start_date = ?, updated_at = ? WHERE org_id = ? AND id = ?`).run(dates.startDate, now, orgId, id);
-  } else {
-    db.prepare(`UPDATE tasks SET due_date = ?, updated_at = ? WHERE org_id = ? AND id = ?`).run(dates.dueDate, now, orgId, id);
   }
 }
 

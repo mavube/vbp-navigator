@@ -37,8 +37,7 @@ export async function POST(req: NextRequest) {
     description: typeof body.description === "string" ? body.description.slice(0, 4000) : undefined,
     assigneeId: typeof body.assigneeId === "string" ? body.assigneeId : null,
     assigneeName: typeof body.assigneeName === "string" ? body.assigneeName.trim().slice(0, 200) : undefined,
-    startDate: typeof body.startDate === "string" && body.startDate ? body.startDate : null,
-    dueDate: typeof body.dueDate === "string" && body.dueDate ? body.dueDate : null,
+    dueDate: typeof body.dueDate === "string" ? body.dueDate : null,
   });
   return NextResponse.json(task, { status: 201 });
 }

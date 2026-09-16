@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Spinner } from "@/components/ui/Spinner";
 import { CommentThread } from "@/components/collaboration/CommentThread";
 import type { Class, ClassStatus, SetupTask, SetupTaskStatus } from "@/components/classes/types";
 
@@ -33,7 +32,6 @@ export function ClassItem({
   const [tasks, setTasks] = useState<SetupTask[]>([]);
   const [tasksLoading, setTasksLoading] = useState(true);
   const [error, setError] = useState("");
-  const [pendingStatus, setPendingStatus] = useState<ClassStatus | null>(null);
 
   useEffect(() => {
     fetch(`/api/tasks?classId=${cls.id}`, { cache: "no-store" })
@@ -44,21 +42,16 @@ export function ClassItem({
 
   async function setClassStatus(status: ClassStatus) {
     setError("");
-    setPendingStatus(status);
-    try {
-      const res = await fetch(`/api/classes/${cls.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (res.ok) {
-        onStatusChange(status);
-      } else {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error || "Couldn't update status");
-      }
-    } finally {
-      setPendingStatus(null);
+    const res = await fetch(`/api/classes/${cls.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) {
+      onStatusChange(status);
+    } else {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error || "Couldn't update status");
     }
   }
 
@@ -93,24 +86,20 @@ export function ClassItem({
             <button
               type="button"
               onClick={() => setClassStatus(nextStatus)}
-              disabled={pendingStatus !== null}
-              className={`v2-btn v2-btn-secondary ${pendingStatus === nextStatus ? "v2-btn-busy" : ""}`}
+              className="v2-btn v2-btn-secondary"
               style={{ padding: "4px 10px", fontSize: "0.75rem" }}
             >
-              {pendingStatus === nextStatus && <Spinner size={11} />}
-              {pendingStatus === nextStatus ? "Marking…" : `Mark ${STATUS_LABEL[nextStatus].toLowerCase()}`}
+              Mark {STATUS_LABEL[nextStatus].toLowerCase()}
             </button>
           )}
           {cls.status !== "cancelled" && cls.status !== "completed" && (
             <button
               type="button"
               onClick={() => setClassStatus("cancelled")}
-              disabled={pendingStatus !== null}
-              className={`v2-btn v2-btn-secondary ${pendingStatus === "cancelled" ? "v2-btn-busy" : ""}`}
+              className="v2-btn v2-btn-secondary"
               style={{ padding: "4px 10px", fontSize: "0.75rem" }}
             >
-              {pendingStatus === "cancelled" && <Spinner size={11} />}
-              {pendingStatus === "cancelled" ? "Cancelling…" : "Cancel"}
+              Cancel
             </button>
           )}
         </div>

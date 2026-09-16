@@ -1,74 +1,45 @@
-/* v2.0 design system tokens — premium corporate SaaS direction: clarity,
-   restraint, generous whitespace, refined type. Deliberately separate
-   from v1.0's "blueprint" tokens in app/globals.css (different variable
-   names, --v2- prefixed) so v1.0's still-live Service Architecture view
-   renders unchanged until Phase 2 replaces it with a dynamic,
-   database-backed version — this file governs every v2.0 module screen.
+/* v2.0 design system tokens — Microsoft/Apple-inspired: clarity and
+   restraint over decoration. Deliberately separate from v1.0's
+   "blueprint" tokens in app/globals.css (different variable names, --v2-
+   prefixed) so v1.0's existing screens render unchanged while new v2.0
+   components adopt this system. Once every screen is rebuilt, the old
+   tokens can retire — not yet, since v1.0's Service Architecture views
+   are still live.
 
-   Redesigned 2026-09-16 (Phase 1 of the v3.0 roadmap's design-system
-   pass) — values changed, variable names did not, so every existing
-   component and page picks up the new look automatically with zero
-   per-file changes beyond what this phase's own component/page-shell
-   work touches.
-
-   Font: Inter, loaded the same way v1.0 already loads its fonts (a
-   plain CSS @import — a browser-time fetch, not a Next.js build-time
-   one, so it can't break `next build` the way `next/font/google` risks
-   doing in a network-restricted build environment). Falls back to the
-   same solid system-font stack if the import is ever blocked. */
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+   Swap these values for VBP's real brand colors/type whenever that's
+   decided — this is a clean, neutral starting palette, not a final one. */
 
 :root {
-  --v2-bg: #F7F8FA;
+  --v2-bg: #FAFAFA;
   --v2-surface: #FFFFFF;
   --v2-surface-raised: #FFFFFF;
-  --v2-surface-sunken: #F1F2F5;
-  --v2-border: #E5E7EB;
-  --v2-border-strong: #D1D5DB;
+  --v2-border: #E4E4E7;
+  --v2-border-strong: #D4D4D8;
 
-  --v2-text: #0F172A;
-  --v2-text-muted: #475569;
-  --v2-text-faint: #94A3B8;
+  --v2-text: #18181B;
+  --v2-text-muted: #52525B;
+  --v2-text-faint: #A1A1AA;
 
-  --v2-accent: #4F46E5;
-  --v2-accent-hover: #4338CA;
-  --v2-accent-soft: #EEF2FF;
+  --v2-accent: #2563EB;
+  --v2-accent-hover: #1D4ED8;
+  --v2-accent-soft: #EFF4FF;
 
-  --v2-success: #15803D;
-  --v2-success-soft: #ECFDF3;
-  --v2-warning: #B45309;
-  --v2-warning-soft: #FFFBEB;
-  --v2-danger: #B91C1C;
-  --v2-danger-soft: #FEF2F2;
+  --v2-success: #16A34A;
+  --v2-success-soft: #EDFBF2;
+  --v2-warning: #D97706;
+  --v2-warning-soft: #FEF6E7;
+  --v2-danger: #DC2626;
+  --v2-danger-soft: #FDECEC;
 
-  --v2-font: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --v2-font: -apple-system, "Segoe UI", "Inter", system-ui, sans-serif;
   --v2-font-mono: "SF Mono", "Cascadia Code", ui-monospace, monospace;
 
-  --v2-text-xs: 0.75rem;
-  --v2-text-sm: 0.8125rem;
-  --v2-text-base: 0.9375rem;
-  --v2-text-lg: 1.125rem;
-  --v2-text-xl: 1.375rem;
-  --v2-text-2xl: 1.75rem;
-  --v2-text-3xl: 2.125rem;
+  --v2-radius-sm: 6px;
+  --v2-radius-md: 10px;
+  --v2-radius-lg: 16px;
 
-  --v2-weight-normal: 400;
-  --v2-weight-medium: 500;
-  --v2-weight-semibold: 600;
-  --v2-weight-bold: 700;
-
-  --v2-radius-sm: 8px;
-  --v2-radius-md: 12px;
-  --v2-radius-lg: 20px;
-
-  --v2-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 1px rgba(15, 23, 42, 0.03);
-  --v2-shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04);
-  --v2-shadow-lg: 0 20px 48px rgba(15, 23, 42, 0.14), 0 4px 12px rgba(15, 23, 42, 0.06);
-
-  --v2-transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-
-  --v2-container: 1120px;
+  --v2-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --v2-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
 
   --v2-space-1: 4px;
   --v2-space-2: 8px;
@@ -76,36 +47,33 @@
   --v2-space-4: 16px;
   --v2-space-6: 24px;
   --v2-space-8: 32px;
-  --v2-space-10: 40px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --v2-bg: #0B0D12;
-    --v2-surface: #14161C;
-    --v2-surface-raised: #191C24;
-    --v2-surface-sunken: #0F1116;
-    --v2-border: #262A34;
-    --v2-border-strong: #363B47;
-    --v2-text: #F1F5F9;
-    --v2-text-muted: #94A3B8;
-    --v2-text-faint: #64748B;
-    --v2-accent: #818CF8;
-    --v2-accent-hover: #A5B4FC;
-    --v2-accent-soft: #1E1F3D;
+    --v2-bg: #0A0A0B;
+    --v2-surface: #18181B;
+    --v2-surface-raised: #202023;
+    --v2-border: #2E2E32;
+    --v2-border-strong: #3F3F46;
+    --v2-text: #FAFAFA;
+    --v2-text-muted: #A1A1AA;
+    --v2-text-faint: #71717A;
+    --v2-accent: #5B8DEF;
+    --v2-accent-hover: #7BA3F2;
+    --v2-accent-soft: #172239;
   }
 }
 :root[data-theme="dark"] {
-  --v2-bg: #0B0D12;
-  --v2-surface: #14161C;
-  --v2-surface-raised: #191C24;
-  --v2-surface-sunken: #0F1116;
-  --v2-border: #262A34;
-  --v2-border-strong: #363B47;
-  --v2-text: #F1F5F9;
-  --v2-text-muted: #94A3B8;
-  --v2-text-faint: #64748B;
-  --v2-accent: #818CF8;
-  --v2-accent-hover: #A5B4FC;
-  --v2-accent-soft: #1E1F3D;
+  --v2-bg: #0A0A0B;
+  --v2-surface: #18181B;
+  --v2-surface-raised: #202023;
+  --v2-border: #2E2E32;
+  --v2-border-strong: #3F3F46;
+  --v2-text: #FAFAFA;
+  --v2-text-muted: #A1A1AA;
+  --v2-text-faint: #71717A;
+  --v2-accent: #5B8DEF;
+  --v2-accent-hover: #7BA3F2;
+  --v2-accent-soft: #172239;
 }

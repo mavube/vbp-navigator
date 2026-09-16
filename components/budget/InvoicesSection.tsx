@@ -5,7 +5,6 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
-import { Spinner } from "@/components/ui/Spinner";
 import type { ServiceOption, Invoice, InvoiceDirection, InvoiceStatus } from "@/components/budget/types";
 
 const STATUS_TONE: Record<InvoiceStatus, "neutral" | "success" | "danger"> = {
@@ -24,7 +23,6 @@ export function InvoicesSection({ services }: { services: ServiceOption[] }) {
   const [party, setParty] = useState("");
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
-  const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/invoices", { cache: "no-store" })
@@ -64,18 +62,13 @@ export function InvoicesSection({ services }: { services: ServiceOption[] }) {
   }
 
   async function markPaid(id: string) {
-    setMarkingPaidId(id);
-    try {
-      const res = await fetch(`/api/invoices/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "paid" }),
-      });
-      if (res.ok) {
-        setInvoices((prev) => prev.map((inv) => (inv.id === id ? { ...inv, status: "paid" } : inv)));
-      }
-    } finally {
-      setMarkingPaidId(null);
+    const res = await fetch(`/api/invoices/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "paid" }),
+    });
+    if (res.ok) {
+      setInvoices((prev) => prev.map((inv) => (inv.id === id ? { ...inv, status: "paid" } : inv)));
     }
   }
 
@@ -101,7 +94,7 @@ export function InvoicesSection({ services }: { services: ServiceOption[] }) {
             style={{ flex: "1 1 180px" }}
           />
           <Input type="number" min="0" step="0.01" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} required style={{ maxWidth: 140 }} />
-          <Button type="submit" loading={busy} disabled={!serviceId || !party.trim() || !amount}>
+          <Button type="submit" disabled={busy || !serviceId || !party.trim() || !amount}>
             {busy ? "Creating…" : "Create invoice"}
           </Button>
         </form>
@@ -127,15 +120,8 @@ export function InvoicesSection({ services }: { services: ServiceOption[] }) {
                   <span style={{ fontWeight: 600 }}>{inv.amount.toLocaleString()}</span>
                   <Badge tone={STATUS_TONE[inv.status]}>{inv.status}</Badge>
                   {inv.status === "unpaid" && (
-                    <button
-                      type="button"
-                      onClick={() => markPaid(inv.id)}
-                      disabled={markingPaidId !== null}
-                      className={`v2-btn v2-btn-secondary ${markingPaidId === inv.id ? "v2-btn-busy" : ""}`}
-                      style={{ padding: "4px 10px", fontSize: "0.75rem" }}
-                    >
-                      {markingPaidId === inv.id && <Spinner size={11} />}
-                      {markingPaidId === inv.id ? "Marking…" : "Mark paid"}
+                    <button type="button" onClick={() => markPaid(inv.id)} className="v2-btn v2-btn-secondary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
+                      Mark paid
                     </button>
                   )}
                 </div>

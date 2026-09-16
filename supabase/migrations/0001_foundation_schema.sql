@@ -43,7 +43,7 @@ create table if not exists role_assignments (
   id          uuid primary key default gen_random_uuid(),
   org_id      uuid not null references organizations (id) on delete cascade,
   user_id     uuid not null references profiles (id) on delete cascade,
-  service_id  uuid, -- FK added below, once `services` exists (see the alter table further down)
+  service_id  uuid references services (id) on delete cascade,
   role        app_role not null,
   created_at  timestamptz not null default now(),
   unique (user_id, service_id, role)

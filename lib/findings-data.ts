@@ -2,12 +2,6 @@
 // part (status/note/updatedAt) lives in the database; this is the fixed
 // title/body copy for each, carried over verbatim from the VBP Navigator
 // Artifact.
-//
-// Findings 2 and 3 updated 2026-09-16 (v3.0 roadmap Phase 2) to match
-// claude/vbp-internal-service-architecture.md's 2026-09-15 revision,
-// which added the Compensation Earning Service as VBP's 5th enabling
-// service — this file was the one place that update hadn't reached yet
-// (flagged as a known gap in the build guide since that doc was written).
 
 export type FindingSeverity = "watch" | "critical" | "elevated";
 
@@ -28,14 +22,14 @@ export const FINDINGS: FindingDef[] = [
   {
     id: "finding-2",
     severity: "critical",
-    title: "Jennifer concentrates enabling services across nearly the whole chain — now spanning three services",
-    body: "Jennifer provides Service Delivery Management, Financial & Commercial Administration, and — as of the Compensation Earning Service addition — runs the organization's compensation process too. Three enabling services, one of which (Compensation) touches every provider in the organization by definition. This is the same provider-concentration/single-point-of-failure risk as before, now structurally larger: it's not just that most CVS depend on Jennifer, it's that the org's ability to pay anyone now also does.",
+    title: "Jennifer concentrates enabling services across nearly the whole chain",
+    body: "Jennifer provides Service Delivery Management and Financial & Commercial Administration — two enabling services that most Customer Value Services in the chain depend on. That's provider concentration: a single point of failure sitting underneath the value chain, not a workload problem confined to one service.",
   },
   {
     id: "finding-3",
     severity: "elevated",
-    title: "Anne is a Customer Value Service provider and an enabling provider at once — now approving two enabling services",
-    body: "Anne delivers two Customer Value Services — Master Class Delivery and Post-Training Certification Support — while also approving two enabling services: Financial & Commercial Administration, and now Compensation Earning Service. No backup is assigned to any of it. If she's unavailable, both CVS delivery and two separate approval chains lose their person at once.",
+    title: "Anne is a Customer Value Service provider and an enabling provider at once",
+    body: "Anne delivers two Customer Value Services — Master Class Delivery and Post-Training Certification Support — while also approving Financial & Commercial Administration, an enabling service. If she's unavailable, a CVS the client is paying for and an enabling function both lose their provider at once, and no backup is assigned to either.",
   },
   {
     id: "finding-4",
