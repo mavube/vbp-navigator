@@ -142,6 +142,12 @@
 @media (max-width: 640px) {
   .v2-page-shell { padding: var(--v2-space-6) var(--v2-space-4) var(--v2-space-8); }
   .v2-page-header-text h1 { font-size: var(--v2-text-2xl); }
+  /* A section-head actions block that wraps onto its own row (multiple
+     buttons, e.g. the Tasks work-view switcher) otherwise keeps
+     shrink-to-fit width and never actually wraps its own children —
+     the classic flex-wrap pitfall. Forcing it to the row's full width
+     here gives its buttons something to wrap against. */
+  .v2-section-actions { width: 100%; }
 }
 
 /* -------------------------------------------------------- app shell */
@@ -268,7 +274,19 @@
 .v2-mobilebar-brand span { color: var(--v2-accent); font-weight: var(--v2-weight-semibold); }
 
 @media (max-width: 960px) {
-  .v2-mobilebar { display: flex; }
+  /* .v2-mobilebar is a flow sibling of .v2-shell-main inside .v2-shell
+     (a flex row) — .v2-sidebar and its backdrop go position:fixed
+     below and drop out of that row entirely, but the mobilebar is
+     sticky (still in-flow) and, with no explicit width, was sizing
+     itself to its content (~160px) as a flex item sitting *beside*
+     .v2-shell-main instead of a full-width bar *above* it — the real
+     cause of the cramped mobile content column this whole @media
+     block otherwise looks correct for. Forcing it to a 100% flex
+     basis on a wrapping shell puts it on its own full-width row and
+     lets .v2-shell-main have the entire next row to itself. */
+  .v2-shell { flex-wrap: wrap; }
+  .v2-mobilebar { display: flex; flex: 1 1 100%; }
+  .v2-shell-main { flex: 1 1 100%; }
   .v2-sidebar {
     position: fixed;
     inset: 0 auto 0 0;
@@ -327,8 +345,24 @@
   line-height: 1.5;
   margin: 0;
 }
-.v2-section-actions { display: flex; align-items: center; gap: var(--v2-space-2); flex-shrink: 0; }
+.v2-section-actions { display: flex; align-items: center; gap: var(--v2-space-2); flex-shrink: 0; flex-wrap: wrap; }
 .v2-section-body { display: flex; flex-direction: column; gap: var(--v2-space-4); }
+
+/* ------------------------------------------------------------ kanban */
+/* v3.0 Phase 6 — the Tasks module's Kanban work view
+   (components/tasks/TaskKanban.tsx). Three columns side by side reads
+   fine at desktop width; at phone width three columns of real content
+   just overlap unreadably (the same "don't just shrink the desktop UI"
+   problem the sidebar's own mobile drawer exists to avoid), so this
+   collapses to one column per row below the breakpoint. */
+.v2-kanban-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--v2-space-4);
+}
+@media (max-width: 720px) {
+  .v2-kanban-grid { grid-template-columns: 1fr; }
+}
 
 /* -------------------------------------------------------------- login */
 /* Was v1.0's legacy .login-wrap/.login-card (app/globals.css), styled

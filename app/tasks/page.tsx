@@ -3,7 +3,7 @@ import { TaskBoard } from "@/components/tasks/TaskBoard";
 
 export default function TasksPage() {
   return (
-    <Page title="Tasks" description="Every task belongs to a service — never a department or just a person.">
+    <Page title="Tasks" description="List, Kanban, Gantt, and Calendar views of the same work, plus first-class blockers with an owner, an impact, and a required action.">
       <TaskBoard />
     </Page>
   );

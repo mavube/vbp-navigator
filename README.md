@@ -1,55 +1,92 @@
-# Phase 6a — UI/UX Shell Modernization — apply instructions
+# Phase 6 — Work Views + Blocker Intelligence
 
-Out-of-band pass, ahead of the v3.0 roadmap's numbered Phase 6 (Work Views + Blocker
-Intelligence), in direct response to feedback on Phase 5's screenshots: the top nav
-was overcrowded (11 links, wrapping to a second row) and every page was just "top
-nav, then content — that's it." This replaces the top nav with a grouped side bar
-and introduces a reusable, titled "Section" card primitive.
+v3.0 roadmap Phase 6 (§10/§11): Kanban, Gantt, and Calendar views alongside
+Tasks' existing List, plus first-class Blocker objects (owner, impact,
+required action). Also fixes a mobile layout bug in the Phase 6a sidebar
+shell that this phase's own verification uncovered — see "Mobile shell fix"
+below. Full detail is in the build guide's Phase 6 entry.
 
-## 1. Delete this file
+## How to apply
 
-- `components/ui/TopNav.tsx` — replaced by `Sidebar.tsx` + `AppShell.tsx` below.
+1. **Run the migration first**, before deploying the code: `supabase/migrations/0014_phase6_work_views_blockers.sql` against your Supabase project (adds `tasks.start_date`, creates the `blockers` table + RLS policies).
+2. **New files** — copy these in as-is, no existing counterparts:
+   - `lib/db-blockers.ts`
+   - `app/api/blockers/route.ts`
+   - `app/api/blockers/[id]/route.ts`
+   - `components/tasks/TaskKanban.tsx`
+   - `components/tasks/TaskGantt.tsx`
+   - `components/tasks/TaskCalendar.tsx`
+   - `components/tasks/BlockersPanel.tsx`
+3. **Replace these existing files** at the same paths:
+   - `lib/db-tasks.ts` (adds `startDate` + `updateTaskDates()`)
+   - `app/api/tasks/route.ts` (POST now reads `startDate`)
+   - `app/api/tasks/[id]/route.ts` (PATCH rewritten — accepts `status` and/or dates together)
+   - `components/tasks/types.ts` (adds `startDate`, `Blocker` types)
+   - `components/tasks/NewTaskForm.tsx` (adds Start/Due date fields)
+   - `components/tasks/TaskItem.tsx` (adds blocked badge, inline date editor)
+   - `components/tasks/TaskBoard.tsx` (view-switcher + Blockers panel, full rewrite)
+   - `app/tasks/page.tsx` (description text update only)
+   - `styles/components.css` — **replace the whole file.** In addition to this phase's new `.v2-kanban-grid` / `.v2-section-actions` rules, it contains the mobile shell fix below, which touches the existing `@media (max-width: 960px)` block from Phase 6a.
+4. Rebuild (`npm run build`) and redeploy as usual (Vercel auto-redeploys on push).
 
-## 2. New files — add these
+No new npm dependencies — Gantt and Calendar are both hand-built components, same "no new dependency where a plain component works" call as Phase 5's document rendering.
 
-- `components/ui/icons.tsx` — 12 small hand-written inline SVG icons for the nav (no new npm dependency).
-- `components/ui/Sidebar.tsx` — the grouped side bar (Overview / Delivery / Finance / Growth), collapsing to a slide-in drawer on mobile.
-- `components/ui/AppShell.tsx` — wraps every page in the sidebar layout, except `/login`, `/apply`, `/assess` (same exemption TopNav had).
-- `components/ui/Section.tsx` — a titled, card-framed content grouping (title + optional description + optional actions).
+## Mobile shell fix (found during this phase, not new scope)
 
-## 3. Replace these existing files (same relative paths)
+While verifying the four Task views on mobile, a pre-existing bug from Phase
+6a's sidebar shell surfaced: `.v2-mobilebar` (the hamburger+brand bar) is a
+normal-flow sibling of the main content column inside `.v2-shell`'s flex
+row. `.v2-sidebar` itself correctly switches to `position: fixed` on mobile
+(out of flow, as intended), but the mobilebar stayed `position: sticky`
+(still in-flow) with no explicit width — so it sized itself to its own
+content (~160px) as a flex item sitting *beside* the page content, instead
+of a full-width bar *above* it. That silently squeezed every page's usable
+mobile width down to under 200px on a 390px phone screen.
 
-- `components/ui/Page.tsx` — header is now a flex row with an optional `actions` slot; drops the old fixed top-nav-height offset.
-- `components/documents/DocumentsWorkspace.tsx` — its three blocks (Generate / Needs attention / Closed) now use `Section`.
-- `components/architecture/ArchitectureView.tsx` — the Internal Operation tab's two blocks (service chain, services) now use `Section`; the untouched Reference Case (GDC) tab is unaffected.
-- `app/layout.tsx` — mounts `AppShell` instead of `TopNav`.
-- `styles/components.css` — old `.v2-nav*` rules removed, new `.v2-shell`/`.v2-sidebar*`/`.v2-mobilebar*`/`.v2-section*` rules added. All other rules in this file are unchanged.
-- `claude/vbp-navigator-os-v2-build-guide.md` — documentation only; already synced to the Claude project too.
+This was invisible in Phase 6a's own screenshots because Documents/
+Architecture's content still happened to read okay cramped into ~190px —
+it only became obvious once Kanban's grid and Gantt's chart needed their
+true available width. Fixed in `styles/components.css` with:
 
-## 4. What this gives you
+```css
+.v2-shell { flex-wrap: wrap; }
+.v2-mobilebar { flex: 1 1 100%; }
+.v2-shell-main { flex: 1 1 100%; }
+```
 
-Every existing page automatically gets the new shell — a persistent, grouped left
-side bar on desktop (with small icons per link, active-state highlighting, and
-section labels: Overview / Delivery / Finance / Growth) that collapses into a
-hamburger-triggered slide-in drawer on narrow screens. `/login`, `/apply`, and
-`/assess` are unaffected — they keep their own standalone centered layout with no
-sidebar or mobile bar, exactly as before.
+so the mobile bar takes its own full-width row and the content column gets
+the rest. Verified via `getBoundingClientRect()` diagnostics (main content
+column now ~350px of a 390px viewport, matching the pre-existing 20px
+global body padding on each side — not the ~188px it was measuring before)
+and re-screenshotted every page, not just this phase's new views. This
+affects **every page**, not just Tasks, since the shell wraps the whole
+app — worth knowing if you're comparing new mobile screenshots to anything
+taken before this fix.
 
-Two pages — Documents and Architecture (Internal Operation tab) — were also updated
-to use the new `Section` component so there's a concrete example of the
-"cards, sections" direction beyond just the shell change. Every other page still
-renders correctly inside the new shell, just without the deeper per-page
-sectioning yet (see "Not done yet" in the build guide).
+## What was verified
 
-## 5. No new dependencies
+- `npm run build` — clean.
+- Local smoke test: created tasks with start/due dates across all four
+  views; reported a blocker against a task and a service-only blocker;
+  resolved one; confirmed the resolved list and open-count badges update.
+- Playwright screenshots, desktop (1440px) and mobile (390px), of List,
+  Kanban, Gantt, Calendar, and the Blockers panel, plus a mobile/desktop
+  re-check of `/` and `/documents` to confirm the shell fix has no
+  regression on pages outside this phase's scope.
+- `document.body.scrollWidth` checked at 390px on all four views — no
+  horizontal page overflow (Gantt intentionally scrolls horizontally
+  *within its own card* on narrow screens, rather than forcing the page
+  wider, same pattern as a responsive data table).
 
-The nav icons are hand-written inline SVGs, not an icon library. No `package.json` changes in this phase.
+## Known limitations / not done yet
 
-## 6. Known limitations (documented, not hidden)
-
-Only Documents and Architecture got the `Section` treatment — the other nine module
-pages (Tasks, Pipeline, Classes, Budget, Compensation, Requests, Capabilities,
-Prospects, Customers) still use their own pre-existing layout inside the new shell.
-No dark-mode visual QA on the new sidebar/section CSS specifically. The mobile
-drawer closes on backdrop tap, the hamburger, or route change — no swipe gesture.
-See the build guide's Phase 6a section for the full list.
+- No un-resolve path for a blocker once marked resolved (deliberate —
+  mirrors Documents' "closed is closed" pattern; revisit if staff want to
+  reopen one by mistake).
+- No drag-to-reschedule in Gantt/Calendar — dates are set via the existing
+  "Set dates" control on a task.
+- No dark-mode visual QA on the new Kanban/Gantt/Calendar CSS specifically.
+- The mobile shell bug fixed here means any mobile screenshots from prior
+  phases (taken before this fix) show the cramped ~190px layout — no
+  functional regression from that, just not representative of the shell
+  as it now renders.
