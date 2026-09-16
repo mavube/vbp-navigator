@@ -81,6 +81,22 @@ export async function listEngagements(orgId: string, customerId?: string): Promi
   return (rows as Record<string, unknown>[]).map(fromSqliteRow);
 }
 
+// Single-row lookup — needed by the Phase 5 document routes to resolve
+// a document's anchor (which service, which customer) before rendering
+// a template. listEngagements() above stays list-shaped since nothing
+// else has needed a single lookup until now.
+export async function getEngagement(orgId: string, id: string): Promise<EngagementRow | null> {
+  await ensureSchema();
+  if (IS_POSTGRES) {
+    const res = await (await getPgPool()).query(`SELECT ${PG_COLS} FROM engagements WHERE org_id = $1 AND id = $2`, [orgId, id]);
+    return res.rows[0] ?? null;
+  }
+  const row = (await getSqliteDb()).prepare(`SELECT * FROM engagements WHERE org_id = ? AND id = ?`).get(orgId, id) as
+    | Record<string, unknown>
+    | undefined;
+  return row ? fromSqliteRow(row) : null;
+}
+
 async function createEngagement(orgId: string, input: { customerId: string; serviceId: string; leadId?: string | null }): Promise<EngagementRow> {
   await ensureSchema();
   const id = randomUUID();

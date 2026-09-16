@@ -78,6 +78,21 @@ export async function listCustomers(orgId: string): Promise<CustomerRow[]> {
   return (rows as Record<string, unknown>[]).map(fromSqliteRow);
 }
 
+// Single-row lookup by id — needed by the Phase 5 document routes to
+// resolve a customer's name/email when generating a post-admission
+// document against an Engagement.
+export async function getCustomerById(orgId: string, id: string): Promise<CustomerRow | null> {
+  await ensureSchema();
+  if (IS_POSTGRES) {
+    const res = await (await getPgPool()).query(`SELECT ${PG_COLS} FROM customers WHERE org_id = $1 AND id = $2`, [orgId, id]);
+    return res.rows[0] ?? null;
+  }
+  const row = (await getSqliteDb()).prepare(`SELECT * FROM customers WHERE org_id = ? AND id = ?`).get(orgId, id) as
+    | Record<string, unknown>
+    | undefined;
+  return row ? fromSqliteRow(row) : null;
+}
+
 async function findCustomerByEmail(orgId: string, email: string): Promise<CustomerRow | null> {
   if (!email) return null;
   await ensureSchema();

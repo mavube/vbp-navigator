@@ -30,3 +30,12 @@ export async function getOrgBySlug(slug: string): Promise<OrgSummary | null> {
   );
   return res.rows[0] ?? null;
 }
+
+// The reverse lookup — needed by the Phase 5 document templates, which
+// need the org's real display name (not its slug) to write "on behalf
+// of <org>" into generated text. Same local-dev fallback as above.
+export async function getOrgName(orgId: string): Promise<string> {
+  if (!IS_POSTGRES) return "VBP (local dev)";
+  const res = await (await getPgPool()).query(`SELECT name FROM organizations WHERE id = $1`, [orgId]);
+  return res.rows[0]?.name ?? "This organization";
+}

@@ -15,6 +15,7 @@ const LINKS = [
   { href: "/capabilities", label: "Capabilities" },
   { href: "/prospects", label: "Prospects" },
   { href: "/customers", label: "Customers" },
+  { href: "/documents", label: "Documents" },
 ];
 
 // Redesigned 2026-09-16 (Phase 1, design-system pass). The original

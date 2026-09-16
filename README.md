@@ -1,70 +1,55 @@
-# Phase 4 — Customer, Engagement & Public Entry Point — apply instructions
+# Phase 5 — Document Generation Engine — apply instructions
 
-v3.0 roadmap, Phase 4 — the largest phase so far. Adds a public, unauthenticated
-application/assessment entry point, and the Customer + Engagement entities a lead
-graduates into on admission.
+v3.0 roadmap, Phase 5. Templated document generation across all 7 types the roadmap
+named: proposal, quotation, invitation, approval request, confirmation, admission
+communication, completion record.
 
 ## 1. Run the new migration against your real Supabase project
 
-`supabase/migrations/0012_phase4_customer_engagement.sql` — adds three new tables:
-`prospects`, `customers`, `engagements`. Pure additive, no changes to any existing
-table. Run it in the Supabase SQL editor (or your usual path) before deploying the
-code below — the public `/apply`/`/assess` forms and the new `/prospects`/`/customers`
-pages will error without it.
+`supabase/migrations/0013_phase5_documents.sql` — one new table, `documents`. Pure
+additive, no changes to any existing table. Run it before deploying the code below.
 
-## 2. New files — add these (they don't exist yet in your repo)
+## 2. New files — add these
 
-- `lib/organizations.ts`
-- `lib/db-prospects.ts`
-- `lib/db-customers.ts`
-- `lib/db-engagements.ts`
-- `app/api/public/org/[slug]/services/route.ts`
-- `app/api/public/org/[slug]/prospects/route.ts`
-- `app/api/prospects/route.ts`
-- `app/api/prospects/[id]/route.ts`
-- `app/api/prospects/[id]/promote/route.ts`
-- `app/api/customers/route.ts`
-- `app/apply/[org]/page.tsx`
-- `app/assess/[org]/page.tsx`
-- `app/prospects/page.tsx`
-- `app/customers/page.tsx`
-- `components/public/PublicShell.tsx`
-- `components/public/ApplyForm.tsx`
-- `components/prospects/types.ts`
-- `components/prospects/ProspectItem.tsx`
-- `components/prospects/ProspectsWorkspace.tsx`
-- `components/customers/types.ts`
-- `components/customers/CustomersWorkspace.tsx`
+- `lib/document-templates.ts`
+- `lib/document-context.ts`
+- `lib/db-documents.ts`
+- `app/api/documents/route.ts`
+- `app/api/documents/[id]/route.ts`
+- `app/api/documents/[id]/regenerate/route.ts`
+- `app/api/documents/[id]/new-version/route.ts`
+- `app/documents/page.tsx`
+- `components/documents/types.ts`
+- `components/documents/NewDocumentForm.tsx`
+- `components/documents/DocumentItem.tsx`
+- `components/documents/DocumentsWorkspace.tsx`
 
 ## 3. Replace these existing files (same relative paths)
 
-- `lib/db-leads.ts` — adds one new function (`getLead`), rest unchanged
-- `app/api/leads/[id]/route.ts` — the admission → customer/engagement trigger
-- `components/pipeline/LeadItem.tsx` — one small addition, shows a link after admission
-- `components/ui/TopNav.tsx` — adds Prospects/Customers links, hides nav on public pages
-- `styles/components.css` — adds the new `.v2-public-*` classes for the public pages
-- `proxy.ts` — exempts `/apply`, `/assess`, `/api/public/**` from the auth redirect
+- `lib/db-engagements.ts` — adds one new function (`getEngagement`), rest unchanged
+- `lib/db-customers.ts` — adds one new function (`getCustomerById`), rest unchanged
+- `lib/organizations.ts` — adds one new function (`getOrgName`), rest unchanged
+- `components/ui/TopNav.tsx` — adds the "Documents" link
 - `claude/vbp-navigator-os-v2-build-guide.md` — documentation only; already synced to the Claude project too
 
-## 4. What this gives you (production URLs)
+## 4. What this gives you
 
-VBP's real org slug is `vbp` (see `supabase/seed/vbp_bootstrap_full.sql`), so once
-deployed:
+A new **Documents** page (needs login, same as every other internal page). Staff pick
+a document type, pick which Lead or Engagement it's for (the picker switches
+automatically based on type — proposals/quotations/invitations/approval requests need
+a Lead since Customer doesn't exist pre-admission; confirmations/admission
+communications/completion records need an Engagement), type in whatever's specific to
+that document (a price, a date, a justification), and generate. From there: regenerate
+while still a draft, submit for approval, approve or reject (same Budget Approver
+authority as Budget Requests and Compensation), mark sent once approved, or open a new
+version of an approved/rejected document.
 
-- **`/apply/vbp`** — public application form, no login required
-- **`/assess/vbp`** — public Professional Readiness Assessment intake, no login required
-- **`/prospects`** (internal, needs login) — review everyone who came in through either
-  public form; promote to a real Pipeline lead, or decline
-- **`/customers`** (internal, needs login) — every customer, created automatically the
-  moment a Pipeline lead is marked "admitted," with their Engagement(s)
+Nothing about any other page changed — this is a purely additive phase.
 
-Nothing about the existing Pipeline board changed except one thing: marking a lead
-"admitted" now also creates (or reuses, if that email already has a customer record)
-a Customer and an Engagement behind the scenes — no new steps for staff to learn.
+## 5. Known limitations (documented, not hidden)
 
-## 5. Before sharing the public links
-
-The `/apply` and `/assess` forms have no spam or bot protection yet (no CAPTCHA, no
-rate limiting) — noted in the build guide as a known gap. Fine to leave running for
-now since the links aren't public yet, but worth revisiting before you actually share
-them.
+No PDF export and no real email sending yet — "mark sent" is a manual record that
+staff sent it themselves outside the app. No spam/bot protection on the public
+`/apply`/`/assess` forms from Phase 4 (documents can now be generated from
+Prospects-turned-Leads, so this matters a bit more than before). See the build guide's
+Phase 5 section for the full list.
