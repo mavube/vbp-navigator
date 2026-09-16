@@ -13,7 +13,17 @@ export async function proxy(req: NextRequest) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return NextResponse.next();
 
   const { pathname } = req.nextUrl;
-  if (pathname === "/login" || pathname.startsWith("/auth")) {
+  // v3.0 roadmap Phase 4: /apply and /assess are the public,
+  // unauthenticated entry points (§6-7), and /api/public/** is the
+  // only API surface they're allowed to call — both need to stay
+  // reachable with no session, same as /login and /auth already are.
+  if (
+    pathname === "/login" ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/apply") ||
+    pathname.startsWith("/assess") ||
+    pathname.startsWith("/api/public")
+  ) {
     return NextResponse.next();
   }
 

@@ -1,0 +1,145 @@
+// Data layer for the `engagements` table — schema in
+// supabase/migrations/0012_phase4_customer_engagement.sql. An
+// Engagement is a Customer's actual journey through one Service — the
+// first real, distinct entity for the brief's own
+// Customer -> Situation -> Service -> Engagement -> Outcome chain (§2-3).
+// Created only by admitLead below (called from app/api/leads/[id]/
+// route.ts when a lead's stage becomes 'admitted'), never directly.
+
+import { randomUUID } from "node:crypto";
+import { IS_POSTGRES, getPgPool, getSqliteDb } from "@/lib/db-driver";
+import { getLead, type LeadRow } from "@/lib/db-leads";
+import { findOrCreateCustomerByEmail, type CustomerRow } from "@/lib/db-customers";
+
+export type EngagementStatus = "active" | "completed" | "paused";
+
+export interface EngagementRow {
+  id: string;
+  customerId: string;
+  serviceId: string;
+  leadId: string | null;
+  status: EngagementStatus;
+  startedAt: string;
+  outcomeNote: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+let schemaReady: Promise<void> | null = null;
+function ensureSchema(): Promise<void> {
+  if (IS_POSTGRES) return Promise.resolve(); // owned by the Supabase migrations
+
+  if (!schemaReady) {
+    schemaReady = (async () => {
+      (await getSqliteDb()).exec(`CREATE TABLE IF NOT EXISTS engagements (
+        id TEXT PRIMARY KEY,
+        org_id TEXT NOT NULL,
+        customer_id TEXT NOT NULL,
+        service_id TEXT NOT NULL,
+        lead_id TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        started_at TEXT NOT NULL,
+        outcome_note TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`);
+    })();
+  }
+  return schemaReady;
+}
+
+function fromSqliteRow(row: Record<string, unknown>): EngagementRow {
+  return {
+    id: row.id as string,
+    customerId: row.customer_id as string,
+    serviceId: row.service_id as string,
+    leadId: (row.lead_id as string) ?? null,
+    status: row.status as EngagementStatus,
+    startedAt: row.started_at as string,
+    outcomeNote: row.outcome_note as string,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  };
+}
+
+const PG_COLS = `id, customer_id AS "customerId", service_id AS "serviceId", lead_id AS "leadId", status,
+                    started_at AS "startedAt", outcome_note AS "outcomeNote",
+                    created_at AS "createdAt", updated_at AS "updatedAt"`;
+
+export async function listEngagements(orgId: string, customerId?: string): Promise<EngagementRow[]> {
+  await ensureSchema();
+  if (IS_POSTGRES) {
+    const res = customerId
+      ? await (await getPgPool()).query(`SELECT ${PG_COLS} FROM engagements WHERE org_id = $1 AND customer_id = $2 ORDER BY started_at DESC`, [orgId, customerId])
+      : await (await getPgPool()).query(`SELECT ${PG_COLS} FROM engagements WHERE org_id = $1 ORDER BY started_at DESC`, [orgId]);
+    return res.rows;
+  }
+  const db = await getSqliteDb();
+  const rows = customerId
+    ? db.prepare(`SELECT * FROM engagements WHERE org_id = ? AND customer_id = ? ORDER BY started_at DESC`).all(orgId, customerId)
+    : db.prepare(`SELECT * FROM engagements WHERE org_id = ? ORDER BY started_at DESC`).all(orgId);
+  return (rows as Record<string, unknown>[]).map(fromSqliteRow);
+}
+
+async function createEngagement(orgId: string, input: { customerId: string; serviceId: string; leadId?: string | null }): Promise<EngagementRow> {
+  await ensureSchema();
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  const leadId = input.leadId ?? null;
+
+  if (IS_POSTGRES) {
+    await (await getPgPool()).query(
+      `INSERT INTO engagements (id, org_id, customer_id, service_id, lead_id, status, started_at, outcome_note, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,'active',$6,'',$6,$6)`,
+      [id, orgId, input.customerId, input.serviceId, leadId, now]
+    );
+  } else {
+    (await getSqliteDb())
+      .prepare(
+        `INSERT INTO engagements (id, org_id, customer_id, service_id, lead_id, status, started_at, outcome_note, created_at, updated_at)
+         VALUES (?,?,?,?,?,'active',?,'',?,?)`
+      )
+      .run(id, orgId, input.customerId, input.serviceId, leadId, now, now, now);
+  }
+
+  return { id, customerId: input.customerId, serviceId: input.serviceId, leadId, status: "active", startedAt: now, outcomeNote: "", createdAt: now, updatedAt: now };
+}
+
+export async function updateEngagementStatus(orgId: string, id: string, status: EngagementStatus, outcomeNote?: string): Promise<void> {
+  await ensureSchema();
+  const now = new Date().toISOString();
+  if (IS_POSTGRES) {
+    await (await getPgPool()).query(
+      `UPDATE engagements SET status = $1, outcome_note = COALESCE($2, outcome_note), updated_at = $3 WHERE org_id = $4 AND id = $5`,
+      [status, outcomeNote ?? null, now, orgId, id]
+    );
+  } else {
+    (await getSqliteDb())
+      .prepare(`UPDATE engagements SET status = ?, outcome_note = COALESCE(?, outcome_note), updated_at = ? WHERE org_id = ? AND id = ?`)
+      .run(status, outcomeNote ?? null, now, orgId, id);
+  }
+}
+
+// The admission-conversion step itself — called from app/api/leads/
+// [id]/route.ts right after a lead's stage is set to 'admitted'. Finds
+// or creates the Customer (by email) and opens a new Engagement for
+// this lead's service. Returns null if the lead doesn't exist (the
+// caller has already validated this before calling updateLeadStage, so
+// that shouldn't happen in practice — defensive, not expected).
+export async function admitLead(orgId: string, leadId: string): Promise<{ customer: CustomerRow; engagement: EngagementRow } | null> {
+  const lead: LeadRow | null = await getLead(orgId, leadId);
+  if (!lead) return null;
+
+  const customer = await findOrCreateCustomerByEmail(orgId, {
+    fullName: lead.contactName,
+    email: lead.contactEmail,
+    phone: lead.contactPhone,
+    sourceLeadId: lead.id,
+  });
+  const engagement = await createEngagement(orgId, { customerId: customer.id, serviceId: lead.serviceId, leadId: lead.id });
+  return { customer, engagement };
+}
+
+export function ensureEngagementsSchema(): Promise<void> {
+  return ensureSchema();
+}

@@ -281,3 +281,65 @@
   padding: var(--v2-space-2) var(--v2-space-3);
   margin: 0;
 }
+
+/* ------------------------------------------------------- public pages */
+/* v3.0 roadmap Phase 4 — the unauthenticated /apply and /assess entry
+   points. No TopNav here (see components/ui/TopNav.tsx — it hides
+   itself on these routes), so this brings its own minimal brand mark.
+   Deliberately its own small set of classes rather than reusing
+   .v2-login-*: a public applicant's form has more fields and needs
+   room to breathe, and keeping it separate means a future change to
+   the login card can't accidentally affect the public intake forms. */
+
+.v2-public-wrap {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--v2-bg);
+  padding: var(--v2-space-8) var(--v2-space-4);
+}
+.v2-public-card {
+  width: 100%;
+  max-width: 560px;
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-border);
+  border-radius: var(--v2-radius-lg);
+  box-shadow: var(--v2-shadow-md);
+  padding: var(--v2-space-8) var(--v2-space-6);
+}
+.v2-public-brand {
+  display: block;
+  font-family: var(--v2-font);
+  font-weight: var(--v2-weight-bold);
+  font-size: var(--v2-text-lg);
+  color: var(--v2-text);
+  text-decoration: none;
+  margin-bottom: var(--v2-space-6);
+  letter-spacing: -0.01em;
+}
+.v2-public-brand span { color: var(--v2-accent); font-weight: var(--v2-weight-semibold); }
+.v2-public-card h1 {
+  font-family: var(--v2-font);
+  font-size: var(--v2-text-xl);
+  font-weight: var(--v2-weight-bold);
+  color: var(--v2-text);
+  margin: 0 0 6px;
+  letter-spacing: -0.01em;
+}
+.v2-public-card > p.v2-public-intro {
+  font-family: var(--v2-font);
+  font-size: var(--v2-text-sm);
+  color: var(--v2-text-muted);
+  margin: 0 0 var(--v2-space-6);
+  line-height: 1.55;
+}
+.v2-public-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--v2-space-4); }
+.v2-public-field label { font-size: var(--v2-text-sm); font-weight: var(--v2-weight-medium); color: var(--v2-text); }
+.v2-public-hint { font-size: var(--v2-text-xs); color: var(--v2-text-faint); margin: 4px 0 0; }
+.v2-public-success {
+  text-align: center;
+  padding: var(--v2-space-6) 0;
+}
+.v2-public-success h1 { margin-bottom: var(--v2-space-2); }
+.v2-public-success p { color: var(--v2-text-muted); font-size: var(--v2-text-sm); }

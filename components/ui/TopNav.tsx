@@ -13,6 +13,8 @@ const LINKS = [
   { href: "/compensation", label: "Compensation" },
   { href: "/service-requests", label: "Requests" },
   { href: "/capabilities", label: "Capabilities" },
+  { href: "/prospects", label: "Prospects" },
+  { href: "/customers", label: "Customers" },
 ];
 
 // Redesigned 2026-09-16 (Phase 1, design-system pass). The original
@@ -31,7 +33,12 @@ export function TopNav() {
   // over the new page.
   useEffect(() => setOpen(false), [pathname]);
 
-  if (pathname === "/login") return null;
+  // v3.0 Phase 4: /apply and /assess are public, unauthenticated pages
+  // (components/public/PublicShell.tsx brings its own minimal brand
+  // mark) — showing the internal nav there would both look broken (its
+  // links all redirect to /login for a visitor with no account) and
+  // leak the existence of internal tooling to the public.
+  if (pathname === "/login" || pathname.startsWith("/apply") || pathname.startsWith("/assess")) return null;
 
   return (
     <header className="v2-nav">

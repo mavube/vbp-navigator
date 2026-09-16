@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { CommentThread } from "@/components/collaboration/CommentThread";
@@ -85,6 +86,17 @@ export function LeadItem({
         </div>
       </div>
       {error && <p style={{ color: "var(--v2-danger)", fontSize: "0.8rem", margin: "8px 0 0" }}>{error}</p>}
+
+      {/* v3.0 Phase 4: admitting a lead also creates a Customer +
+          Engagement (app/api/leads/[id]/route.ts) — a plain link to
+          /customers rather than a deep link to the specific record,
+          since that would need extra state plumbing this stays
+          honest without. */}
+      {lead.stage === "admitted" && (
+        <p style={{ fontSize: "0.75rem", color: "var(--v2-text-faint)", margin: "8px 0 0" }}>
+          → Customer record created — see <Link href="/customers" style={{ color: "var(--v2-accent)" }}>Customers</Link>
+        </p>
+      )}
 
       <CommentThread entityType="lead" entityId={lead.id} />
     </Card>
