@@ -20,12 +20,32 @@ const TABS: Array<{ key: Tab; label: string }> = [
 export function BudgetWorkspace() {
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [tab, setTab] = useState<Tab>("requests");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
+    // A failed fetch used to be silently converted into an empty
+    // services array (`res.ok ? res.json() : []`), which made a real
+    // outage (e.g. the DB being unreachable) look identical to a
+    // legitimately empty, freshly-bootstrapped org — "No services in
+    // this org yet" either way. Surface the failure instead, same
+    // pattern TaskBoard already uses, so the two cases are never
+    // confused again.
     fetch("/api/services", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : []))
-      .then(setServices);
+      .then((res) => {
+        if (!res.ok) throw new Error("failed to load");
+        return res.json();
+      })
+      .then((data) => {
+        setServices(data);
+        setError("");
+      })
+      .catch(() => setError("Couldn't load services — try refreshing."))
+      .finally(() => setLoading(false));
   }, []);
+
+  if (loading) return <p style={{ color: "var(--v2-text-muted)" }}>Loading…</p>;
+  if (error) return <p style={{ color: "var(--v2-danger)" }}>{error}</p>;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-5)" }}>
