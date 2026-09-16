@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card } from "@/components/ui/Card";
+import { Section } from "@/components/ui/Section";
 import { NewDocumentForm } from "@/components/documents/NewDocumentForm";
 import { DocumentItem } from "@/components/documents/DocumentItem";
 import type { DocumentRecord, ServiceOption, LeadOption, EngagementOption, CustomerOption } from "@/components/documents/types";
@@ -46,10 +46,7 @@ export function DocumentsWorkspace() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-6)" }}>
-      <Card>
-        <h2 style={{ fontFamily: "var(--v2-font)", fontSize: "1.05rem", margin: "0 0 var(--v2-space-3)" }}>
-          Generate a document
-        </h2>
+      <Section title="Generate a document" description="Pick a document type, the lead or engagement it's for, and the specifics — a price, a date, a justification.">
         <NewDocumentForm
           services={services}
           leads={leads}
@@ -57,34 +54,24 @@ export function DocumentsWorkspace() {
           customers={customers}
           onCreated={(doc) => setDocuments((prev) => [doc, ...prev])}
         />
-      </Card>
+      </Section>
 
-      <div>
-        <h2 style={{ fontFamily: "var(--v2-font)", fontSize: "1.1rem", margin: "0 0 var(--v2-space-3)" }}>
-          Needs attention ({needsAttention.length})
-        </h2>
+      <Section title={`Needs attention (${needsAttention.length})`} description="Drafts and documents waiting on an approval decision.">
         {needsAttention.length === 0 ? (
-          <p style={{ color: "var(--v2-text-muted)" }}>Nothing waiting on a draft or approval decision.</p>
+          <p style={{ color: "var(--v2-text-muted)", margin: 0 }}>Nothing waiting on a draft or approval decision.</p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-3)" }}>
-            {needsAttention.map((d) => (
-              <DocumentItem key={d.id} doc={d} onChange={(updated) => setDocuments((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))} />
-            ))}
-          </div>
+          needsAttention.map((d) => (
+            <DocumentItem key={d.id} doc={d} onChange={(updated) => setDocuments((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))} />
+          ))
         )}
-      </div>
+      </Section>
 
       {closed.length > 0 && (
-        <div>
-          <h2 style={{ fontFamily: "var(--v2-font)", fontSize: "1.1rem", margin: "0 0 var(--v2-space-3)" }}>
-            Closed ({closed.length})
-          </h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-3)" }}>
-            {closed.map((d) => (
-              <DocumentItem key={d.id} doc={d} onChange={(updated) => setDocuments((prev) => [updated, ...prev.filter((x) => x.id !== updated.id)])} />
-            ))}
-          </div>
-        </div>
+        <Section title={`Closed (${closed.length})`} description="Approved or rejected documents. Open a new version from any of these to revise.">
+          {closed.map((d) => (
+            <DocumentItem key={d.id} doc={d} onChange={(updated) => setDocuments((prev) => [updated, ...prev.filter((x) => x.id !== updated.id)])} />
+          ))}
+        </Section>
       )}
     </div>
   );

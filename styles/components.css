@@ -105,13 +105,19 @@
   max-width: var(--v2-container);
   margin: 0 auto;
   padding: var(--v2-space-10) var(--v2-space-6) var(--v2-space-10);
-  min-height: calc(100dvh - 61px);
-  background: var(--v2-bg);
+  width: 100%;
   font-family: var(--v2-font);
   color: var(--v2-text);
 }
-.v2-page-header { margin-bottom: var(--v2-space-8); }
-.v2-page-header h1 {
+.v2-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--v2-space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--v2-space-8);
+}
+.v2-page-header-text h1 {
   font-family: var(--v2-font);
   font-size: var(--v2-text-3xl);
   font-weight: var(--v2-weight-semibold);
@@ -119,7 +125,7 @@
   letter-spacing: -0.02em;
   margin: 0 0 6px;
 }
-.v2-page-header p {
+.v2-page-header-text p {
   font-family: var(--v2-font);
   font-size: var(--v2-text-base);
   color: var(--v2-text-muted);
@@ -127,108 +133,202 @@
   line-height: 1.55;
   margin: 0;
 }
-@media (max-width: 640px) {
-  .v2-page-shell { padding: var(--v2-space-6) var(--v2-space-4) var(--v2-space-8); }
-  .v2-page-header h1 { font-size: var(--v2-text-2xl); }
-}
-
-/* -------------------------------------------------------------- nav */
-/* Sticky, translucent header with a real brand mark and a proper
-   mobile-collapsed menu (not just a desktop nav that wraps awkwardly
-   at narrow widths) — the previous TopNav was intentionally left
-   minimal until there were "three or four modules"; there are eight
-   now. */
-
-.v2-nav {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: saturate(180%) blur(12px);
-  -webkit-backdrop-filter: saturate(180%) blur(12px);
-  border-bottom: 1px solid var(--v2-border);
-}
-:root[data-theme="dark"] .v2-nav { background: rgba(11, 13, 18, 0.82); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .v2-nav { background: rgba(11, 13, 18, 0.82); }
-}
-.v2-nav-inner {
-  position: relative;
-  max-width: var(--v2-container);
-  margin: 0 auto;
-  padding: var(--v2-space-3) var(--v2-space-6);
+.v2-page-header-actions {
   display: flex;
   align-items: center;
-  gap: var(--v2-space-6);
+  gap: var(--v2-space-2);
+  flex-shrink: 0;
 }
-.v2-nav-brand {
+@media (max-width: 640px) {
+  .v2-page-shell { padding: var(--v2-space-6) var(--v2-space-4) var(--v2-space-8); }
+  .v2-page-header-text h1 { font-size: var(--v2-text-2xl); }
+}
+
+/* -------------------------------------------------------- app shell */
+/* v3.0 Phase 6a (UI/UX modernization). Replaces the old single
+   top-of-page nav bar — every module link crowded into one horizontal
+   row that wrapped onto a second line at desktop width once Documents
+   became the 11th link — with a persistent, grouped side bar plus a
+   dedicated content column. This is the "sidebars" half of "best
+   layouts, cards, side bars and sections"; .v2-section below is the
+   "sections" half. */
+
+.v2-shell {
+  display: flex;
+  min-height: 100dvh;
+  background: var(--v2-bg);
+  align-items: flex-start;
+}
+.v2-shell-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.v2-sidebar {
+  width: 252px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--v2-space-6);
+  background: var(--v2-surface);
+  border-right: 1px solid var(--v2-border);
+  padding: var(--v2-space-6) var(--v2-space-4);
+  z-index: 30;
+}
+.v2-sidebar-brand {
+  display: block;
   font-family: var(--v2-font);
   font-weight: var(--v2-weight-bold);
   font-size: var(--v2-text-lg);
   color: var(--v2-text);
   text-decoration: none;
   letter-spacing: -0.01em;
-  white-space: nowrap;
+  padding: 0 var(--v2-space-3);
 }
-.v2-nav-brand span { color: var(--v2-accent); font-weight: var(--v2-weight-semibold); }
+.v2-sidebar-brand span { color: var(--v2-accent); font-weight: var(--v2-weight-semibold); }
 
-.v2-nav-links {
+.v2-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v2-space-5);
+  overflow-y: auto;
+}
+.v2-sidebar-group { display: flex; flex-direction: column; gap: 1px; }
+.v2-sidebar-group-label {
+  font-family: var(--v2-font);
+  font-size: 0.6875rem;
+  font-weight: var(--v2-weight-bold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--v2-text-faint);
+  margin: 0 var(--v2-space-3) 6px;
+}
+.v2-sidebar-link {
   display: flex;
   align-items: center;
-  gap: 2px;
-  margin-left: auto;
-  flex-wrap: wrap;
-}
-.v2-nav-link {
+  gap: 10px;
   font-family: var(--v2-font);
   font-size: var(--v2-text-sm);
   font-weight: var(--v2-weight-medium);
   color: var(--v2-text-muted);
   text-decoration: none;
-  padding: 7px var(--v2-space-3);
+  padding: 8px var(--v2-space-3);
   border-radius: var(--v2-radius-sm);
   transition: background-color var(--v2-transition), color var(--v2-transition);
-  white-space: nowrap;
 }
-.v2-nav-link:hover { color: var(--v2-text); background: var(--v2-surface-sunken); }
-.v2-nav-link-active { color: var(--v2-accent); background: var(--v2-accent-soft); font-weight: var(--v2-weight-semibold); }
+.v2-sidebar-link:hover { color: var(--v2-text); background: var(--v2-surface-sunken); }
+.v2-sidebar-link-active { color: var(--v2-accent); background: var(--v2-accent-soft); font-weight: var(--v2-weight-semibold); }
+.v2-sidebar-icon { flex-shrink: 0; opacity: 0.85; }
+.v2-sidebar-link-active .v2-sidebar-icon { opacity: 1; }
 
-.v2-nav-toggle {
+.v2-sidebar-backdrop { display: none; }
+
+.v2-mobilebar {
   display: none;
-  margin-left: auto;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  align-items: center;
+  gap: var(--v2-space-3);
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--v2-border);
+  padding: var(--v2-space-3) var(--v2-space-4);
+}
+:root[data-theme="dark"] .v2-mobilebar { background: rgba(11, 13, 18, 0.86); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .v2-mobilebar { background: rgba(11, 13, 18, 0.86); }
+}
+.v2-mobilebar-toggle {
   width: 36px;
   height: 36px;
   border-radius: var(--v2-radius-sm);
   border: 1px solid var(--v2-border);
   background: var(--v2-surface);
-  flex-direction: column;
+  color: var(--v2-text-muted);
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
   cursor: pointer;
   flex-shrink: 0;
 }
-.v2-nav-toggle span { width: 16px; height: 2px; background: var(--v2-text-muted); border-radius: 2px; }
-
-@media (max-width: 860px) {
-  .v2-nav-toggle { display: flex; }
-  .v2-nav-links {
-    display: none;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    flex-direction: column;
-    align-items: stretch;
-    background: var(--v2-surface);
-    border-bottom: 1px solid var(--v2-border);
-    padding: var(--v2-space-3) var(--v2-space-4);
-    box-shadow: var(--v2-shadow-md);
-    gap: 2px;
-  }
-  .v2-nav-links-open { display: flex; }
-  .v2-nav-link { padding: 10px var(--v2-space-3); }
+.v2-mobilebar-brand {
+  font-family: var(--v2-font);
+  font-weight: var(--v2-weight-bold);
+  font-size: var(--v2-text-base);
+  color: var(--v2-text);
+  text-decoration: none;
+  letter-spacing: -0.01em;
 }
+.v2-mobilebar-brand span { color: var(--v2-accent); font-weight: var(--v2-weight-semibold); }
+
+@media (max-width: 960px) {
+  .v2-mobilebar { display: flex; }
+  .v2-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 280px;
+    transform: translateX(-100%);
+    transition: transform var(--v2-transition);
+    box-shadow: var(--v2-shadow-lg);
+    z-index: 50;
+  }
+  .v2-sidebar-open { transform: translateX(0); }
+  .v2-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 45;
+  }
+}
+
+/* ----------------------------------------------------------- section */
+/* A titled, card-framed content grouping — the "sections" requested
+   alongside sidebars. Module workspaces (Documents, Architecture, …)
+   use this to break a long scroll into clearly labeled, self-contained
+   blocks instead of ad hoc h2-plus-div headings. */
+
+.v2-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--v2-space-4);
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-border);
+  border-radius: var(--v2-radius-lg);
+  box-shadow: var(--v2-shadow-sm);
+  padding: var(--v2-space-6);
+}
+.v2-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--v2-space-4);
+  flex-wrap: wrap;
+}
+.v2-section-title {
+  font-family: var(--v2-font);
+  font-size: var(--v2-text-lg);
+  font-weight: var(--v2-weight-semibold);
+  color: var(--v2-text);
+  letter-spacing: -0.01em;
+  margin: 0 0 4px;
+}
+.v2-section-description {
+  font-family: var(--v2-font);
+  font-size: var(--v2-text-sm);
+  color: var(--v2-text-muted);
+  max-width: 640px;
+  line-height: 1.5;
+  margin: 0;
+}
+.v2-section-actions { display: flex; align-items: center; gap: var(--v2-space-2); flex-shrink: 0; }
+.v2-section-body { display: flex; flex-direction: column; gap: var(--v2-space-4); }
 
 /* -------------------------------------------------------------- login */
 /* Was v1.0's legacy .login-wrap/.login-card (app/globals.css), styled

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/Card";
+import { Section } from "@/components/ui/Section";
 import { Findings } from "@/components/Findings";
 import { GdcChain } from "@/components/GdcChain";
 import { GdcTable } from "@/components/GdcTable";
@@ -74,28 +75,24 @@ export function ArchitectureView() {
 
           {!loading && !error && (
             <>
-              <section>
-                <h2 style={{ fontFamily: "var(--v2-font)", fontSize: "var(--v2-text-xl)", fontWeight: 600, color: "var(--v2-text)", margin: "0 0 var(--v2-space-2)" }}>
-                  The service chain
-                </h2>
-                <p style={{ color: "var(--v2-text-muted)", marginBottom: "var(--v2-space-4)", maxWidth: 640 }}>
-                  Computed live from each service&apos;s own dependency data — not a fixed diagram.
-                  A dashed border marks a Customer Value Service with no provider assigned yet.
-                </p>
+              <Section
+                title="The service chain"
+                description="Computed live from each service's own dependency data — not a fixed diagram. A dashed border marks a Customer Value Service with no provider assigned yet."
+              >
                 <ServiceGraph services={services} />
-              </section>
+              </Section>
 
-              <section>
-                <h2 style={{ fontFamily: "var(--v2-font)", fontSize: "var(--v2-text-xl)", fontWeight: 600, color: "var(--v2-text)", margin: "0 0 var(--v2-space-2)" }}>
-                  Services
-                </h2>
-                <p style={{ color: "var(--v2-text-muted)", marginBottom: "var(--v2-space-4)", maxWidth: 640 }}>
-                  Full detail per service, straight from the catalog — grouped by CVS/Enabling, or by
-                  who actually provides them.
-                </p>
+              <Section
+                title="Services"
+                description="Full detail per service, straight from the catalog — grouped by CVS/Enabling, or by who actually provides them."
+              >
                 <ServiceCatalogue services={services} />
-              </section>
+              </Section>
 
+              {/* Findings renders its own "Findings" heading (legacy v1.0
+                  .section-title styling it isn't worth touching here), so
+                  it's wrapped in a plain Card rather than a titled Section
+                  to avoid a duplicate heading. */}
               <Card>
                 <Findings />
               </Card>
