@@ -4,7 +4,7 @@ import "@/styles/design-tokens.css";
 import "@/styles/components.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { VersionBadge } from "@/components/ui/VersionBadge";
-import { TopNav } from "@/components/ui/TopNav";
+
 
 export const metadata: Metadata = {
   title: "VBP Navigator OS",
@@ -27,7 +27,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <TopNav />
         {children}
         <VersionBadge />
         <ServiceWorkerRegister />
