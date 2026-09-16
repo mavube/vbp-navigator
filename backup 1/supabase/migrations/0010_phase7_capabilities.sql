@@ -1,0 +1,17 @@
+-- Phase 7: Capabilities/Workload + Outcomes metrics — the reporting/
+-- rollup layer. Deliberately adds no new tables: every number on the
+-- Capabilities page is computed live from tables that already exist
+-- (tasks, leads, classes, service_requests, budget_requests, expenses,
+-- compensation_entries), grouped by service — see lib/rollups.ts. That
+-- keeps the numbers always-accurate with nothing to go stale.
+--
+-- The one real addition: a task needs a "who's doing this" signal for
+-- a per-person workload view to mean anything. `assignee_id` already
+-- exists (a real profiles FK) but nothing in the UI sets it yet, and
+-- there's no person-picker to add one honestly in this pass — so
+-- `assignee_name` is a denormalized display name, same pattern as
+-- `service_requests.requester_name` / `compensation_entries.employee_name`
+-- / `comments.author_name` from earlier phases, set once at task
+-- creation (reassigning later is a follow-up, not blocking the
+-- reporting layer this phase is actually about).
+alter table tasks add column if not exists assignee_name text not null default '';
