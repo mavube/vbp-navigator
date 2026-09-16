@@ -1,27 +1,41 @@
 /* v2.0 core components — small, composable, token-driven. Keep this
-   file focused on the handful of primitives (button, card, badge,
-   input) every feature module will reuse; module-specific styling
-   belongs with that module, not here. */
+   file focused on primitives every feature module reuses; module-
+   specific styling belongs with that module, not here.
+
+   Redesigned 2026-09-16 (Phase 1, design-system pass) alongside
+   design-tokens.css — every value below reads from a token, so no
+   feature module needed to change for this pass to reach it. */
+
+* { box-sizing: border-box; }
 
 .v2-btn {
   font-family: var(--v2-font);
-  font-size: 0.875rem;
-  font-weight: 500;
-  padding: var(--v2-space-2) var(--v2-space-4);
+  font-size: var(--v2-text-sm);
+  font-weight: var(--v2-weight-semibold);
+  padding: 9px var(--v2-space-4);
   border-radius: var(--v2-radius-sm);
   border: 1px solid transparent;
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color var(--v2-transition), border-color var(--v2-transition),
+    box-shadow var(--v2-transition), transform var(--v2-transition);
 }
 .v2-btn:disabled { opacity: 0.5; cursor: default; }
-.v2-btn-primary { background: var(--v2-accent); color: #fff; }
+.v2-btn:active:not(:disabled) { transform: translateY(1px); }
+.v2-btn:focus-visible { outline: 2px solid var(--v2-accent); outline-offset: 2px; }
+
+.v2-btn-primary {
+  background: var(--v2-accent);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.25);
+}
 .v2-btn-primary:hover:not(:disabled) { background: var(--v2-accent-hover); }
+
 .v2-btn-secondary {
   background: var(--v2-surface);
   color: var(--v2-text);
   border-color: var(--v2-border-strong);
 }
-.v2-btn-secondary:hover:not(:disabled) { background: var(--v2-bg); }
+.v2-btn-secondary:hover:not(:disabled) { background: var(--v2-surface-sunken); }
 
 .v2-card {
   background: var(--v2-surface);
@@ -34,15 +48,14 @@
 .v2-badge {
   display: inline-flex;
   align-items: center;
-  font-family: var(--v2-font-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  padding: 2px var(--v2-space-2);
+  font-family: var(--v2-font);
+  font-size: var(--v2-text-xs);
+  letter-spacing: 0.01em;
+  padding: 3px var(--v2-space-2);
   border-radius: 999px;
-  font-weight: 600;
+  font-weight: var(--v2-weight-semibold);
 }
-.v2-badge-neutral { background: var(--v2-bg); color: var(--v2-text-muted); border: 1px solid var(--v2-border); }
+.v2-badge-neutral { background: var(--v2-surface-sunken); color: var(--v2-text-muted); border: 1px solid var(--v2-border); }
 .v2-badge-accent { background: var(--v2-accent-soft); color: var(--v2-accent); }
 .v2-badge-success { background: var(--v2-success-soft); color: var(--v2-success); }
 .v2-badge-warning { background: var(--v2-warning-soft); color: var(--v2-warning); }
@@ -50,15 +63,21 @@
 
 .v2-input {
   font-family: var(--v2-font);
-  font-size: 0.9rem;
+  font-size: var(--v2-text-base);
   color: var(--v2-text);
   background: var(--v2-surface);
   border: 1px solid var(--v2-border-strong);
   border-radius: var(--v2-radius-sm);
-  padding: var(--v2-space-2) var(--v2-space-3);
+  padding: 9px var(--v2-space-3);
   width: 100%;
+  transition: border-color var(--v2-transition), box-shadow var(--v2-transition);
 }
-.v2-input:focus-visible { outline: 2px solid var(--v2-accent); outline-offset: 1px; }
+.v2-input::placeholder { color: var(--v2-text-faint); }
+.v2-input:focus-visible {
+  outline: none;
+  border-color: var(--v2-accent);
+  box-shadow: 0 0 0 3px var(--v2-accent-soft);
+}
 
 .v2-version-badge {
   position: fixed;
@@ -74,4 +93,187 @@
   border-radius: 999px;
   padding: 3px 10px;
   pointer-events: none;
+}
+
+/* ---------------------------------------------------------- page shell */
+/* One shared layout wrapper (components/ui/Page.tsx) so every module
+   page stops repeating its own inline maxWidth/padding/h1/p markup —
+   a single place to keep the "premium, consistent, generous
+   whitespace" direction true everywhere at once. */
+
+.v2-page-shell {
+  max-width: var(--v2-container);
+  margin: 0 auto;
+  padding: var(--v2-space-10) var(--v2-space-6) var(--v2-space-10);
+}
+.v2-page-header { margin-bottom: var(--v2-space-8); }
+.v2-page-header h1 {
+  font-family: var(--v2-font);
+  font-size: var(--v2-text-3xl);
+  font-weight: var(--v2-weight-semibold);
+  color: var(--v2-text);
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+}
+.v2-page-header p {
+  font-family: var(--v2-font);
+  font-size: var(--v2-text-base);
+  color: var(--v2-text-muted);
+  max-width: 640px;
+  line-height: 1.55;
+  margin: 0;
+}
+@media (max-width: 640px) {
+  .v2-page-shell { padding: var(--v2-space-6) var(--v2-space-4) var(--v2-space-8); }
+  .v2-page-header h1 { font-size: var(--v2-text-2xl); }
+}
+
+/* -------------------------------------------------------------- nav */
+/* Sticky, translucent header with a real brand mark and a proper
+   mobile-collapsed menu (not just a desktop nav that wraps awkwardly
+   at narrow widths) — the previous TopNav was intentionally left
+   minimal until there were "three or four modules"; there are eight
+   now. */
+
+.v2-nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--v2-border);
+}
+:root[data-theme="dark"] .v2-nav { background: rgba(11, 13, 18, 0.82); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .v2-nav { background: rgba(11, 13, 18, 0.82); }
+}
+.v2-nav-inner {
+  position: relative;
+  max-width: var(--v2-container);
+  margin: 0 auto;
+  padding: var(--v2-space-3) var(--v2-space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--v2-space-6);
+}
+.v2-nav-brand {
+  font-family: var(--v2-font);
+  font-weight: var(--v2-weight-bold);
+  font-size: var(--v2-text-lg);
+  color: var(--v2-text);
+  text-decoration: none;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.v2-nav-brand span { color: var(--v2-accent); font-weight: var(--v2-weight-semibold); }
+
+.v2-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.v2-nav-link {
+  font-family: var(--v2-font);
+  font-size: var(--v2-text-sm);
+  font-weight: var(--v2-weight-medium);
+  color: var(--v2-text-muted);
+  text-decoration: none;
+  padding: 7px var(--v2-space-3);
+  border-radius: var(--v2-radius-sm);
+  transition: background-color var(--v2-transition), color var(--v2-transition);
+  white-space: nowrap;
+}
+.v2-nav-link:hover { color: var(--v2-text); background: var(--v2-surface-sunken); }
+.v2-nav-link-active { color: var(--v2-accent); background: var(--v2-accent-soft); font-weight: var(--v2-weight-semibold); }
+
+.v2-nav-toggle {
+  display: none;
+  margin-left: auto;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--v2-radius-sm);
+  border: 1px solid var(--v2-border);
+  background: var(--v2-surface);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.v2-nav-toggle span { width: 16px; height: 2px; background: var(--v2-text-muted); border-radius: 2px; }
+
+@media (max-width: 860px) {
+  .v2-nav-toggle { display: flex; }
+  .v2-nav-links {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    background: var(--v2-surface);
+    border-bottom: 1px solid var(--v2-border);
+    padding: var(--v2-space-3) var(--v2-space-4);
+    box-shadow: var(--v2-shadow-md);
+    gap: 2px;
+  }
+  .v2-nav-links-open { display: flex; }
+  .v2-nav-link { padding: 10px var(--v2-space-3); }
+}
+
+/* -------------------------------------------------------------- login */
+/* Was v1.0's legacy .login-wrap/.login-card (app/globals.css), styled
+   off the "blueprint" token set. Rebuilt on v2.0 tokens using the
+   existing Input/Button primitives, since sign-in is most people's
+   first impression of the product. The old classes are left in place,
+   unused, rather than deleted — app/globals.css also still styles the
+   live v1.0 Service Architecture page and isn't worth touching twice. */
+
+.v2-login-wrap {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--v2-bg);
+  padding: var(--v2-space-4);
+}
+.v2-login-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-border);
+  border-radius: var(--v2-radius-lg);
+  box-shadow: var(--v2-shadow-md);
+  padding: var(--v2-space-8) var(--v2-space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--v2-space-3);
+}
+.v2-login-card h1 {
+  font-family: var(--v2-font);
+  font-size: var(--v2-text-xl);
+  font-weight: var(--v2-weight-bold);
+  color: var(--v2-text);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.v2-login-card > p {
+  font-family: var(--v2-font);
+  font-size: var(--v2-text-sm);
+  color: var(--v2-text-muted);
+  margin: 0 0 var(--v2-space-2);
+}
+.v2-login-error {
+  font-family: var(--v2-font);
+  color: var(--v2-danger);
+  font-size: var(--v2-text-sm);
+  background: var(--v2-danger-soft);
+  border-radius: var(--v2-radius-sm);
+  padding: var(--v2-space-2) var(--v2-space-3);
+  margin: 0;
 }

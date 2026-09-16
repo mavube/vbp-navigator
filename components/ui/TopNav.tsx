@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const LINKS = [
-  { href: "/", label: "Service Architecture" },
+  { href: "/", label: "Architecture" },
   { href: "/tasks", label: "Tasks" },
   { href: "/pipeline", label: "Pipeline" },
   { href: "/classes", label: "Classes" },
@@ -14,40 +15,58 @@ const LINKS = [
   { href: "/capabilities", label: "Capabilities" },
 ];
 
-// Minimal top nav so v2.0's new modules (starting with Tasks) are
-// reachable alongside v1.0's single-page Service Architecture view.
-// Deliberately plain — a real nav (with the design system's full
-// treatment) is worth revisiting once there are three or four modules,
-// not just two.
+// Redesigned 2026-09-16 (Phase 1, design-system pass). The original
+// version was deliberately minimal, written when Tasks was the only
+// new module — noted in its own comment as "worth revisiting once
+// there are three or four modules." There are eight now. This adds a
+// real brand mark, an active-link treatment beyond just bold+color,
+// and a proper collapsed menu on narrow screens instead of letting
+// eight links wrap awkwardly (the §24 "don't just shrink the desktop
+// UI" requirement).
 export function TopNav() {
   const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+
+  // Close the mobile menu on route change rather than leaving it open
+  // over the new page.
+  useEffect(() => setOpen(false), [pathname]);
+
   if (pathname === "/login") return null;
 
   return (
-    <nav
-      style={{
-        display: "flex",
-        gap: "var(--v2-space-4)",
-        padding: "var(--v2-space-3) var(--v2-space-6)",
-        borderBottom: "1px solid var(--v2-border)",
-        background: "var(--v2-surface)",
-        fontFamily: "var(--v2-font)",
-        fontSize: "0.875rem",
-      }}
-    >
-      {LINKS.map((link) => (
-        <Link
-          key={link.href}
-          href={link.href}
-          style={{
-            color: pathname === link.href ? "var(--v2-accent)" : "var(--v2-text-muted)",
-            fontWeight: pathname === link.href ? 600 : 500,
-            textDecoration: "none",
-          }}
-        >
-          {link.label}
+    <header className="v2-nav">
+      <div className="v2-nav-inner">
+        <Link href="/" className="v2-nav-brand">
+          VBP <span>Navigator</span>
         </Link>
-      ))}
-    </nav>
+
+        <button
+          type="button"
+          className="v2-nav-toggle"
+          aria-label={open ? "Close menu" : "Open menu"}
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+
+        <nav className={`v2-nav-links ${open ? "v2-nav-links-open" : ""}`}>
+          {LINKS.map((link) => {
+            const active = pathname === link.href;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`v2-nav-link ${active ? "v2-nav-link-active" : ""}`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+    </header>
   );
 }

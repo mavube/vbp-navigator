@@ -1,33 +1,41 @@
-# Phase 0 — Housekeeping (2026-09-16)
+# Phase 1 — Design System Foundation (2026-09-16)
 
-Two changes, both verified with a clean `npm run build`:
+Verified with a clean `npm run build` and a Playwright screenshot pass
+(desktop + mobile) against a local dev server. See the build guide's
+new "v3.0 roadmap — Phase 1" section for full detail.
 
-## 1. Remove the debug endpoint
-Delete this file/folder from your repo entirely:
-    app/api/debug/route.ts
-(the whole `app/api/debug/` folder — nothing else needs it)
+## Files in this package (all at their normal repo path)
 
-This was a temporary diagnostic route built to debug the production
-database issue. It's resolved now, so this route has no place in the
-shipped app (it was documented as throwaway from the start).
+    styles/design-tokens.css          — new palette/type-scale/shadows (values only, same variable names)
+    styles/components.css             — polished button/card/badge/input + new page-shell/nav/login styles
+    components/ui/TopNav.tsx           — rebuilt nav: brand mark, active pill, mobile hamburger menu
+    components/ui/Page.tsx             — NEW shared page-layout component
+    app/tasks/page.tsx                 — now uses <Page>
+    app/pipeline/page.tsx              — now uses <Page>
+    app/classes/page.tsx               — now uses <Page>
+    app/budget/page.tsx                — now uses <Page>
+    app/compensation/page.tsx          — now uses <Page>
+    app/service-requests/page.tsx      — now uses <Page>
+    app/capabilities/page.tsx          — now uses <Page>
+    app/login/page.tsx                 — rebuilt on the v2.0 token set (was still on v1.0 legacy classes)
 
-## 2. Replace components/budget/BudgetWorkspace.tsx
-This fixes a real bug: the Budget page's services fetch silently turned
-any failed request into an empty array, showing "No services in this
-org yet" instead of a real error — indistinguishable from a legitimately
-empty org. It now matches Tasks' existing pattern and shows
-"Couldn't load services — try refreshing." on a real failure.
+## What did NOT change
+The root "/" Service Architecture page (components/ServiceCards.tsx and
+friends) is untouched — it's still v1.0's static content on the old
+token set. That's deliberate: it's Phase 2's job (Service Catalogue +
+Graph) to replace it, not this phase's, and you confirmed it should go
+away once that happens.
 
-Just replace your existing file with the one in this zip at the same path:
-    components/budget/BudgetWorkspace.tsx
+## To apply
+Copy these files into your repo at the same paths (overwriting the
+existing ones, except Page.tsx which is new), commit, push via GitHub
+Desktop as before. Vercel will redeploy automatically.
 
-## After applying
-1. Commit and push (GitHub Desktop, same as before).
-2. Vercel will redeploy automatically from the push.
-3. Quick check: visit /budget once deployed — should look identical
-   when things are working (this only changes behavior during a real
-   outage, which is the point).
-
-Build guide (`claude/vbp-navigator-os-v2-build-guide.md`) has been
-updated in the project with the full deployment lessons-learned from
-this week — nothing to apply there, just reference.
+## After deploying
+Worth a quick look on a real phone/browser: the Inter font loads via a
+CSS @import (same pattern v1.0 already used successfully), which
+should work fine on a normal internet connection even though it
+couldn't be independently confirmed loading inside this session's own
+restricted sandbox network. If it doesn't load for some reason, the
+fallback system-font stack still looks solid on its own — nothing
+breaks either way.
