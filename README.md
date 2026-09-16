@@ -1,92 +1,60 @@
-# Phase 6 — Work Views + Blocker Intelligence
+# Phase 6b — Perceived Performance / Click Responsiveness Pass
 
-v3.0 roadmap Phase 6 (§10/§11): Kanban, Gantt, and Calendar views alongside
-Tasks' existing List, plus first-class Blocker objects (owner, impact,
-required action). Also fixes a mobile layout bug in the Phase 6a sidebar
-shell that this phase's own verification uncovered — see "Mobile shell fix"
-below. Full detail is in the build guide's Phase 6 entry.
+An out-of-band pass, not one of the roadmap's 10 numbered phases — triggered by direct feedback after Phase 6 went live: "everything loading heavy... after clicking it doesn't feel like its clicked."
+
+## What this is (and isn't)
+
+Production Supabase is in `us-east-1`; the org is in Tanzania. That's a real ~12,000km round trip on every request, and it's the likely dominant cause of the *actual* slowness — but fixing that means migrating the production database to a closer region, a real infrastructure project with its own risk and downtime, which was discussed and **explicitly deferred** as a separate decision.
+
+This pass fixes the part that's a code problem regardless of network distance: there was **zero visual acknowledgement that a click registered** until the network round trip finished. On real latency, that silence reads as "did that even work?" This pass makes every click respond instantly and synchronously, in the same frame it's clicked, independent of how long the actual request takes.
 
 ## How to apply
 
-1. **Run the migration first**, before deploying the code: `supabase/migrations/0014_phase6_work_views_blockers.sql` against your Supabase project (adds `tasks.start_date`, creates the `blockers` table + RLS policies).
-2. **New files** — copy these in as-is, no existing counterparts:
-   - `lib/db-blockers.ts`
-   - `app/api/blockers/route.ts`
-   - `app/api/blockers/[id]/route.ts`
-   - `components/tasks/TaskKanban.tsx`
-   - `components/tasks/TaskGantt.tsx`
-   - `components/tasks/TaskCalendar.tsx`
-   - `components/tasks/BlockersPanel.tsx`
-3. **Replace these existing files** at the same paths:
-   - `lib/db-tasks.ts` (adds `startDate` + `updateTaskDates()`)
-   - `app/api/tasks/route.ts` (POST now reads `startDate`)
-   - `app/api/tasks/[id]/route.ts` (PATCH rewritten — accepts `status` and/or dates together)
-   - `components/tasks/types.ts` (adds `startDate`, `Blocker` types)
-   - `components/tasks/NewTaskForm.tsx` (adds Start/Due date fields)
-   - `components/tasks/TaskItem.tsx` (adds blocked badge, inline date editor)
-   - `components/tasks/TaskBoard.tsx` (view-switcher + Blockers panel, full rewrite)
-   - `app/tasks/page.tsx` (description text update only)
-   - `styles/components.css` — **replace the whole file.** In addition to this phase's new `.v2-kanban-grid` / `.v2-section-actions` rules, it contains the mobile shell fix below, which touches the existing `@media (max-width: 960px)` block from Phase 6a.
-4. Rebuild (`npm run build`) and redeploy as usual (Vercel auto-redeploys on push).
+No database migration this time — pure frontend change. Just replace these files at the same paths (two are new, the rest are drop-in replacements of existing files):
 
-No new npm dependencies — Gantt and Calendar are both hand-built components, same "no new dependency where a plain component works" call as Phase 5's document rendering.
+**New:**
+- `components/ui/Spinner.tsx`
+- `components/ui/NavProgress.tsx`
 
-## Mobile shell fix (found during this phase, not new scope)
+**Replace:**
+- `components/ui/AppShell.tsx`
+- `components/ui/Sidebar.tsx`
+- `components/ui/Button.tsx`
+- `styles/components.css` — adds `.v2-nav-progress`, `.v2-btn-busy`, `.v2-spinner` rules to the end of the existing file; nothing removed.
+- `components/tasks/TaskItem.tsx`
+- `components/tasks/TaskKanban.tsx`
+- `components/tasks/BlockersPanel.tsx`
+- `components/tasks/NewTaskForm.tsx`
+- `components/budget/BudgetRequestItem.tsx`
+- `components/budget/InvoicesSection.tsx`
+- `components/compensation/EntryItem.tsx`
+- `components/compensation/NewEntryForm.tsx`
+- `components/documents/DocumentItem.tsx`
+- `components/pipeline/LeadItem.tsx`
+- `components/prospects/ProspectItem.tsx`
+- `components/service-requests/RequestItem.tsx`
+- `components/classes/ClassItem.tsx`
+- `components/collaboration/CommentThread.tsx`
 
-While verifying the four Task views on mobile, a pre-existing bug from Phase
-6a's sidebar shell surfaced: `.v2-mobilebar` (the hamburger+brand bar) is a
-normal-flow sibling of the main content column inside `.v2-shell`'s flex
-row. `.v2-sidebar` itself correctly switches to `position: fixed` on mobile
-(out of flow, as intended), but the mobilebar stayed `position: sticky`
-(still in-flow) with no explicit width — so it sized itself to its own
-content (~160px) as a flex item sitting *beside* the page content, instead
-of a full-width bar *above* it. That silently squeezed every page's usable
-mobile width down to under 200px on a 390px phone screen.
+Rebuild (`npm run build`) and redeploy as usual. No new npm dependencies.
 
-This was invisible in Phase 6a's own screenshots because Documents/
-Architecture's content still happened to read okay cramped into ~190px —
-it only became obvious once Kanban's grid and Gantt's chart needed their
-true available width. Fixed in `styles/components.css` with:
+## What changed, concretely
 
-```css
-.v2-shell { flex-wrap: wrap; }
-.v2-mobilebar { flex: 1 1 100%; }
-.v2-shell-main { flex: 1 1 100%; }
-```
+**Page navigation** — clicking any sidebar link now shows a thin purple progress bar across the very top of the screen immediately, before the new page has even started loading. It clears itself once the new page actually lands. This is the fix for "takes time to open."
 
-so the mobile bar takes its own full-width row and the content column gets
-the rest. Verified via `getBoundingClientRect()` diagnostics (main content
-column now ~350px of a 390px viewport, matching the pre-existing 20px
-global body padding on each side — not the ~188px it was measuring before)
-and re-screenshotted every page, not just this phase's new views. This
-affects **every page**, not just Tasks, since the shell wraps the whole
-app — worth knowing if you're comparing new mobile screenshots to anything
-taken before this fix.
+**Every action button app-wide** — Mark done, Approve/Reject, Move to X, Save dates, Report blocker, Mark resolved, and every other button that triggers a server request now: disables itself and its sibling buttons in the same card the instant it's clicked (before the network request even starts), shows a small spinner, and changes its label to an "-ing…" form ("Approve" → "Approving…"). Where a card has several possible actions, only the one you actually clicked shows the spinner — the others just go quietly disabled until it resolves. This is the fix for "doesn't feel like it's clicked."
+
+Two shared building blocks now exist for any future button: `components/ui/Spinner.tsx` (a small inline spinner), and `components/ui/Button.tsx`'s new `loading` prop (pass your existing busy-state boolean straight through and it handles the rest).
 
 ## What was verified
 
-- `npm run build` — clean.
-- Local smoke test: created tasks with start/due dates across all four
-  views; reported a blocker against a task and a service-only blocker;
-  resolved one; confirmed the resolved list and open-count badges update.
-- Playwright screenshots, desktop (1440px) and mobile (390px), of List,
-  Kanban, Gantt, Calendar, and the Blockers panel, plus a mobile/desktop
-  re-check of `/` and `/documents` to confirm the shell fix has no
-  regression on pages outside this phase's scope.
-- `document.body.scrollWidth` checked at 390px on all four views — no
-  horizontal page overflow (Gantt intentionally scrolls horizontally
-  *within its own card* on narrow screens, rather than forcing the page
-  wider, same pattern as a responsive data table).
+- `npm run build` — clean, TypeScript check included.
+- Verified with **artificial network throttling** (Chrome DevTools Protocol, +900ms added latency) — without this, a local dev round trip is too fast to ever catch a busy state in a screenshot. Caught and screenshotted: a task's "Mark in progress" button mid-flight on both desktop (1440px) and mobile (390px), and the nav progress bar mid-transition.
+- Re-verified `TaskKanban.tsx` (the most structurally-changed file this pass) still measures full page width with no horizontal overflow on both viewports, since it went through the most rework.
+- `DocumentItem.tsx`'s busy states were code-reviewed line-for-line against the already-screenshot-verified `TaskItem.tsx` pattern (identical shape) and pass build/typecheck, but weren't separately screenshotted live — this session's local dev database has no seeded documents in it. Same code as what's already visually proven elsewhere, so low risk, but noting it rather than claiming a screenshot that doesn't exist.
 
 ## Known limitations / not done yet
 
-- No un-resolve path for a blocker once marked resolved (deliberate —
-  mirrors Documents' "closed is closed" pattern; revisit if staff want to
-  reopen one by mistake).
-- No drag-to-reschedule in Gantt/Calendar — dates are set via the existing
-  "Set dates" control on a task.
-- No dark-mode visual QA on the new Kanban/Gantt/Calendar CSS specifically.
-- The mobile shell bug fixed here means any mobile screenshots from prior
-  phases (taken before this fix) show the cramped ~190px layout — no
-  functional regression from that, just not representative of the shell
-  as it now renders.
+- The database region migration (the bigger lever on *actual* speed, not just perceived) is still outstanding — a separate, deliberate decision for later.
+- No page-level skeleton loading states — first-load "Loading…" text is unchanged. This pass targeted the click-feedback gap specifically.
+- The `sw.js: Failed to convert value to 'Response'` service worker console errors noticed while diagnosing the earlier Documents 500 were never chased down (that 500 turned out to be a missing migration, not the service worker). Still open, not part of this pass.

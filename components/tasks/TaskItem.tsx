@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { Spinner } from "@/components/ui/Spinner";
 import { CommentThread } from "@/components/collaboration/CommentThread";
 import type { Task, TaskStatus } from "@/components/tasks/types";
 
@@ -39,19 +40,26 @@ export function TaskItem({
   const [startDate, setStartDate] = useState(task.startDate ?? "");
   const [dueDate, setDueDate] = useState(task.dueDate ?? "");
   const [savingDates, setSavingDates] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<TaskStatus | null>(null);
+  const busy = pendingStatus !== null || savingDates;
 
   async function setStatus(status: TaskStatus) {
     setError("");
-    const res = await fetch(`/api/tasks/${task.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    if (res.ok) {
-      onStatusChange(status);
-    } else {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error || "Couldn't update status");
+    setPendingStatus(status);
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        onStatusChange(status);
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error || "Couldn't update status");
+      }
+    } finally {
+      setPendingStatus(null);
     }
   }
 
@@ -99,15 +107,18 @@ export function TaskItem({
                 key={s}
                 type="button"
                 onClick={() => setStatus(s)}
-                className="v2-btn v2-btn-secondary"
+                disabled={busy}
+                className={`v2-btn v2-btn-secondary ${pendingStatus === s ? "v2-btn-busy" : ""}`}
                 style={{ padding: "4px 10px", fontSize: "0.75rem" }}
               >
-                Mark {STATUS_LABEL[s].toLowerCase()}
+                {pendingStatus === s && <Spinner />}
+                {pendingStatus === s ? "Marking…" : `Mark ${STATUS_LABEL[s].toLowerCase()}`}
               </button>
             ))}
           <button
             type="button"
             onClick={() => setEditingDates((v) => !v)}
+            disabled={busy}
             className="v2-btn v2-btn-secondary"
             style={{ padding: "4px 10px", fontSize: "0.75rem" }}
           >
@@ -126,7 +137,14 @@ export function TaskItem({
             Due
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="v2-input" style={{ width: 150 }} />
           </label>
-          <button type="button" onClick={saveDates} disabled={savingDates} className="v2-btn v2-btn-primary" style={{ padding: "8px 14px", fontSize: "0.8rem" }}>
+          <button
+            type="button"
+            onClick={saveDates}
+            disabled={busy}
+            className={`v2-btn v2-btn-primary ${savingDates ? "v2-btn-busy" : ""}`}
+            style={{ padding: "8px 14px", fontSize: "0.8rem" }}
+          >
+            {savingDates && <Spinner />}
             {savingDates ? "Saving…" : "Save dates"}
           </button>
         </div>

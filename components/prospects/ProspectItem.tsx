@@ -3,7 +3,10 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { Spinner } from "@/components/ui/Spinner";
 import type { Prospect, ProspectStatus, ServiceOption } from "@/components/prospects/types";
+
+type ProspectAction = "reviewed" | "declined" | "promote";
 
 const STATUS_TONE: Record<ProspectStatus, "neutral" | "accent" | "success" | "danger"> = {
   new: "neutral",
@@ -30,25 +33,29 @@ export function ProspectItem({
   onChange: (updated: Partial<Prospect>) => void;
 }) {
   const [serviceId, setServiceId] = useState(prospect.serviceId ?? "");
-  const [busy, setBusy] = useState(false);
+  const [pendingAction, setPendingAction] = useState<ProspectAction | null>(null);
+  const busy = pendingAction !== null;
   const [error, setError] = useState("");
 
   const cvsServices = services.filter((s) => s.type === "cvs");
 
-  async function setStatus(status: ProspectStatus) {
+  async function setStatus(status: ProspectStatus, action: ProspectAction) {
     setError("");
-    setBusy(true);
-    const res = await fetch(`/api/prospects/${prospect.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    setBusy(false);
-    if (res.ok) {
-      onChange({ status });
-    } else {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error || "Couldn't update");
+    setPendingAction(action);
+    try {
+      const res = await fetch(`/api/prospects/${prospect.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        onChange({ status });
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error || "Couldn't update");
+      }
+    } finally {
+      setPendingAction(null);
     }
   }
 
@@ -58,19 +65,22 @@ export function ProspectItem({
       return;
     }
     setError("");
-    setBusy(true);
-    const res = await fetch(`/api/prospects/${prospect.id}/promote`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ serviceId }),
-    });
-    setBusy(false);
-    if (res.ok) {
-      const body = await res.json();
-      onChange({ status: "promoted", leadId: body.leadId, serviceId });
-    } else {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error || "Couldn't promote");
+    setPendingAction("promote");
+    try {
+      const res = await fetch(`/api/prospects/${prospect.id}/promote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serviceId }),
+      });
+      if (res.ok) {
+        const body = await res.json();
+        onChange({ status: "promoted", leadId: body.leadId, serviceId });
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error || "Couldn't promote");
+      }
+    } finally {
+      setPendingAction(null);
     }
   }
 
@@ -116,16 +126,37 @@ export function ProspectItem({
               </option>
             ))}
           </select>
-          <button type="button" onClick={promote} disabled={busy} className="v2-btn v2-btn-primary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
-            Promote to lead
+          <button
+            type="button"
+            onClick={promote}
+            disabled={busy}
+            className={`v2-btn v2-btn-primary ${pendingAction === "promote" ? "v2-btn-busy" : ""}`}
+            style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+          >
+            {pendingAction === "promote" && <Spinner size={11} />}
+            {pendingAction === "promote" ? "Promoting…" : "Promote to lead"}
           </button>
           {prospect.status === "new" && (
-            <button type="button" onClick={() => setStatus("reviewed")} disabled={busy} className="v2-btn v2-btn-secondary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
-              Mark reviewed
+            <button
+              type="button"
+              onClick={() => setStatus("reviewed", "reviewed")}
+              disabled={busy}
+              className={`v2-btn v2-btn-secondary ${pendingAction === "reviewed" ? "v2-btn-busy" : ""}`}
+              style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+            >
+              {pendingAction === "reviewed" && <Spinner size={11} />}
+              {pendingAction === "reviewed" ? "Marking…" : "Mark reviewed"}
             </button>
           )}
-          <button type="button" onClick={() => setStatus("declined")} disabled={busy} className="v2-btn v2-btn-secondary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
-            Decline
+          <button
+            type="button"
+            onClick={() => setStatus("declined", "declined")}
+            disabled={busy}
+            className={`v2-btn v2-btn-secondary ${pendingAction === "declined" ? "v2-btn-busy" : ""}`}
+            style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+          >
+            {pendingAction === "declined" && <Spinner size={11} />}
+            {pendingAction === "declined" ? "Declining…" : "Decline"}
           </button>
         </div>
       )}

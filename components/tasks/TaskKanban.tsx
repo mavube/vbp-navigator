@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { Spinner } from "@/components/ui/Spinner";
 import type { Task, TaskStatus } from "@/components/tasks/types";
 
 const COLUMNS: { status: TaskStatus; label: string }[] = [
@@ -23,8 +25,19 @@ export function TaskKanban({
   tasks: Task[];
   serviceName: (serviceId: string) => string;
   blockedTaskIds: Set<string>;
-  onStatusChange: (taskId: string, status: TaskStatus) => void;
+  onStatusChange: (taskId: string, status: TaskStatus) => Promise<void>;
 }) {
+  const [movingTaskId, setMovingTaskId] = useState<string | null>(null);
+
+  async function move(taskId: string, status: TaskStatus) {
+    setMovingTaskId(taskId);
+    try {
+      await onStatusChange(taskId, status);
+    } finally {
+      setMovingTaskId(null);
+    }
+  }
+
   return (
     <div className="v2-kanban-grid">
       {COLUMNS.map((col, colIdx) => {
@@ -63,11 +76,13 @@ export function TaskKanban({
                   {colIdx < COLUMNS.length - 1 && (
                     <button
                       type="button"
-                      onClick={() => onStatusChange(task.id, COLUMNS[colIdx + 1].status)}
-                      className="v2-btn v2-btn-secondary"
+                      onClick={() => move(task.id, COLUMNS[colIdx + 1].status)}
+                      disabled={movingTaskId === task.id}
+                      className={`v2-btn v2-btn-secondary ${movingTaskId === task.id ? "v2-btn-busy" : ""}`}
                       style={{ padding: "4px 10px", fontSize: "0.7rem", alignSelf: "flex-start" }}
                     >
-                      Move to {COLUMNS[colIdx + 1].label.toLowerCase()} →
+                      {movingTaskId === task.id && <Spinner size={11} />}
+                      {movingTaskId === task.id ? "Moving…" : `Move to ${COLUMNS[colIdx + 1].label.toLowerCase()} →`}
                     </button>
                   )}
                 </div>

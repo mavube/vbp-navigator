@@ -95,7 +95,7 @@ export function NewEntryForm({
       </div>
 
       <div>
-        <Button type="submit" disabled={busy || !serviceId || !employeeName.trim() || !period || !basicPay}>
+        <Button type="submit" loading={busy} disabled={!serviceId || !employeeName.trim() || !period || !basicPay}>
           {busy ? "Computing…" : "Create draft entry"}
         </Button>
       </div>

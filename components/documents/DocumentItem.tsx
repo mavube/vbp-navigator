@@ -3,8 +3,11 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { Spinner } from "@/components/ui/Spinner";
 import { DOCUMENT_TYPE_LABELS } from "@/lib/document-templates";
 import type { DocumentRecord, DocumentStatus } from "@/components/documents/types";
+
+type DocumentAction = "regenerate" | "submit" | "approve" | "reject" | "mark_sent" | "new_version";
 
 const STATUS_TONE: Record<DocumentStatus, "neutral" | "accent" | "success" | "danger"> = {
   draft: "neutral",
@@ -21,13 +24,14 @@ const STATUS_LABEL: Record<DocumentStatus, string> = {
 
 export function DocumentItem({ doc, onChange }: { doc: DocumentRecord; onChange: (updated: DocumentRecord) => void }) {
   const [details, setDetails] = useState(doc.details);
-  const [busy, setBusy] = useState(false);
+  const [pendingAction, setPendingAction] = useState<DocumentAction | null>(null);
+  const busy = pendingAction !== null;
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(false);
 
-  async function action(path: string, body: Record<string, unknown>, method: "PATCH" | "POST" = "PATCH") {
+  async function action(path: string, body: Record<string, unknown>, actionName: DocumentAction, method: "PATCH" | "POST" = "PATCH") {
     setError("");
-    setBusy(true);
+    setPendingAction(actionName);
     try {
       const res = await fetch(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json().catch(() => ({}));
@@ -37,28 +41,28 @@ export function DocumentItem({ doc, onChange }: { doc: DocumentRecord; onChange:
       setError(err instanceof Error ? err.message : "Couldn't complete that action");
       return null;
     } finally {
-      setBusy(false);
+      setPendingAction(null);
     }
   }
 
   async function regenerate() {
-    const data = await action(`/api/documents/${doc.id}/regenerate`, { details }, "POST");
+    const data = await action(`/api/documents/${doc.id}/regenerate`, { details }, "regenerate", "POST");
     if (data) onChange({ ...doc, title: data.title, body: data.body, details: data.details });
   }
   async function submitForApproval() {
-    const data = await action(`/api/documents/${doc.id}`, { action: "submit" });
+    const data = await action(`/api/documents/${doc.id}`, { action: "submit" }, "submit");
     if (data) onChange({ ...doc, status: "pending_approval" });
   }
   async function decide(approve: boolean) {
-    const data = await action(`/api/documents/${doc.id}`, { action: approve ? "approve" : "reject" });
+    const data = await action(`/api/documents/${doc.id}`, { action: approve ? "approve" : "reject" }, approve ? "approve" : "reject");
     if (data) onChange({ ...doc, status: data.status });
   }
   async function markSent() {
-    const data = await action(`/api/documents/${doc.id}`, { action: "mark_sent" });
+    const data = await action(`/api/documents/${doc.id}`, { action: "mark_sent" }, "mark_sent");
     if (data) onChange({ ...doc, sentAt: new Date().toISOString() });
   }
   async function newVersion() {
-    const data = await action(`/api/documents/${doc.id}/new-version`, { details }, "POST");
+    const data = await action(`/api/documents/${doc.id}/new-version`, { details }, "new_version", "POST");
     if (data) onChange(data as DocumentRecord);
   }
 
@@ -109,11 +113,25 @@ export function DocumentItem({ doc, onChange }: { doc: DocumentRecord; onChange:
         <div style={{ marginTop: "var(--v2-space-3)", display: "flex", flexDirection: "column", gap: "var(--v2-space-2)" }}>
           <textarea className="v2-input" rows={2} value={details} onChange={(e) => setDetails(e.target.value)} />
           <div style={{ display: "flex", gap: "var(--v2-space-2)" }}>
-            <button type="button" onClick={regenerate} disabled={busy} className="v2-btn v2-btn-secondary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
-              Regenerate
+            <button
+              type="button"
+              onClick={regenerate}
+              disabled={busy}
+              className={`v2-btn v2-btn-secondary ${pendingAction === "regenerate" ? "v2-btn-busy" : ""}`}
+              style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+            >
+              {pendingAction === "regenerate" && <Spinner size={11} />}
+              {pendingAction === "regenerate" ? "Regenerating…" : "Regenerate"}
             </button>
-            <button type="button" onClick={submitForApproval} disabled={busy} className="v2-btn v2-btn-primary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
-              Submit for approval
+            <button
+              type="button"
+              onClick={submitForApproval}
+              disabled={busy}
+              className={`v2-btn v2-btn-primary ${pendingAction === "submit" ? "v2-btn-busy" : ""}`}
+              style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+            >
+              {pendingAction === "submit" && <Spinner size={11} />}
+              {pendingAction === "submit" ? "Submitting…" : "Submit for approval"}
             </button>
           </div>
         </div>
@@ -121,11 +139,25 @@ export function DocumentItem({ doc, onChange }: { doc: DocumentRecord; onChange:
 
       {doc.status === "pending_approval" && (
         <div style={{ marginTop: "var(--v2-space-3)", display: "flex", gap: "var(--v2-space-2)" }}>
-          <button type="button" onClick={() => decide(true)} disabled={busy} className="v2-btn v2-btn-primary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
-            Approve
+          <button
+            type="button"
+            onClick={() => decide(true)}
+            disabled={busy}
+            className={`v2-btn v2-btn-primary ${pendingAction === "approve" ? "v2-btn-busy" : ""}`}
+            style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+          >
+            {pendingAction === "approve" && <Spinner size={11} />}
+            {pendingAction === "approve" ? "Approving…" : "Approve"}
           </button>
-          <button type="button" onClick={() => decide(false)} disabled={busy} className="v2-btn v2-btn-secondary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
-            Reject
+          <button
+            type="button"
+            onClick={() => decide(false)}
+            disabled={busy}
+            className={`v2-btn v2-btn-secondary ${pendingAction === "reject" ? "v2-btn-busy" : ""}`}
+            style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+          >
+            {pendingAction === "reject" && <Spinner size={11} />}
+            {pendingAction === "reject" ? "Rejecting…" : "Reject"}
           </button>
         </div>
       )}
@@ -133,20 +165,41 @@ export function DocumentItem({ doc, onChange }: { doc: DocumentRecord; onChange:
       {doc.status === "approved" && (
         <div style={{ marginTop: "var(--v2-space-3)", display: "flex", gap: "var(--v2-space-2)" }}>
           {!doc.sentAt && (
-            <button type="button" onClick={markSent} disabled={busy} className="v2-btn v2-btn-primary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
-              Mark sent
+            <button
+              type="button"
+              onClick={markSent}
+              disabled={busy}
+              className={`v2-btn v2-btn-primary ${pendingAction === "mark_sent" ? "v2-btn-busy" : ""}`}
+              style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+            >
+              {pendingAction === "mark_sent" && <Spinner size={11} />}
+              {pendingAction === "mark_sent" ? "Marking sent…" : "Mark sent"}
             </button>
           )}
-          <button type="button" onClick={newVersion} disabled={busy} className="v2-btn v2-btn-secondary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
-            Create new version
+          <button
+            type="button"
+            onClick={newVersion}
+            disabled={busy}
+            className={`v2-btn v2-btn-secondary ${pendingAction === "new_version" ? "v2-btn-busy" : ""}`}
+            style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+          >
+            {pendingAction === "new_version" && <Spinner size={11} />}
+            {pendingAction === "new_version" ? "Creating…" : "Create new version"}
           </button>
         </div>
       )}
 
       {doc.status === "rejected" && (
         <div style={{ marginTop: "var(--v2-space-3)" }}>
-          <button type="button" onClick={newVersion} disabled={busy} className="v2-btn v2-btn-secondary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
-            Create new version
+          <button
+            type="button"
+            onClick={newVersion}
+            disabled={busy}
+            className={`v2-btn v2-btn-secondary ${pendingAction === "new_version" ? "v2-btn-busy" : ""}`}
+            style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+          >
+            {pendingAction === "new_version" && <Spinner size={11} />}
+            {pendingAction === "new_version" ? "Creating…" : "Create new version"}
           </button>
         </div>
       )}

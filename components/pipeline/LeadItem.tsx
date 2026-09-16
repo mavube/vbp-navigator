@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { Spinner } from "@/components/ui/Spinner";
 import { CommentThread } from "@/components/collaboration/CommentThread";
 import type { Lead, LeadStage } from "@/components/pipeline/types";
 
@@ -33,19 +34,25 @@ export function LeadItem({
   onStageChange: (stage: LeadStage) => void;
 }) {
   const [error, setError] = useState("");
+  const [pendingStage, setPendingStage] = useState<LeadStage | null>(null);
 
   async function setStage(stage: LeadStage) {
     setError("");
-    const res = await fetch(`/api/leads/${lead.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stage }),
-    });
-    if (res.ok) {
-      onStageChange(stage);
-    } else {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error || "Couldn't update stage");
+    setPendingStage(stage);
+    try {
+      const res = await fetch(`/api/leads/${lead.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage }),
+      });
+      if (res.ok) {
+        onStageChange(stage);
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error || "Couldn't update stage");
+      }
+    } finally {
+      setPendingStage(null);
     }
   }
 
@@ -67,20 +74,24 @@ export function LeadItem({
             <button
               type="button"
               onClick={() => setStage(nextStage)}
-              className="v2-btn v2-btn-secondary"
+              disabled={pendingStage !== null}
+              className={`v2-btn v2-btn-secondary ${pendingStage === nextStage ? "v2-btn-busy" : ""}`}
               style={{ padding: "4px 10px", fontSize: "0.75rem" }}
             >
-              Mark {STAGE_LABEL[nextStage].toLowerCase()}
+              {pendingStage === nextStage && <Spinner size={11} />}
+              {pendingStage === nextStage ? "Marking…" : `Mark ${STAGE_LABEL[nextStage].toLowerCase()}`}
             </button>
           )}
           {lead.stage !== "lost" && lead.stage !== "admitted" && (
             <button
               type="button"
               onClick={() => setStage("lost")}
-              className="v2-btn v2-btn-secondary"
+              disabled={pendingStage !== null}
+              className={`v2-btn v2-btn-secondary ${pendingStage === "lost" ? "v2-btn-busy" : ""}`}
               style={{ padding: "4px 10px", fontSize: "0.75rem" }}
             >
-              Mark lost
+              {pendingStage === "lost" && <Spinner size={11} />}
+              {pendingStage === "lost" ? "Marking…" : "Mark lost"}
             </button>
           )}
         </div>

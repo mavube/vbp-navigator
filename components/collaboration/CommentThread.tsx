@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/Input";
+import { Spinner } from "@/components/ui/Spinner";
 
 interface Comment {
   id: string;
@@ -123,7 +124,13 @@ export function CommentThread({ entityType, entityId }: { entityType: string; en
               style={{ fontSize: "0.85rem", resize: "vertical" }}
             />
             <div>
-              <button type="submit" disabled={busy || !body.trim()} className="v2-btn v2-btn-secondary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
+              <button
+                type="submit"
+                disabled={busy || !body.trim()}
+                className={`v2-btn v2-btn-secondary ${busy ? "v2-btn-busy" : ""}`}
+                style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+              >
+                {busy && <Spinner size={11} />}
                 {busy ? "Posting…" : "Post"}
               </button>
             </div>

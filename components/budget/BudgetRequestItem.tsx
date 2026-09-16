@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
+import { Spinner } from "@/components/ui/Spinner";
 import { CommentThread } from "@/components/collaboration/CommentThread";
 import type { BudgetRequest, BudgetStatus, Quotation } from "@/components/budget/types";
 
@@ -26,6 +27,8 @@ export function BudgetRequestItem({
   const [vendor, setVendor] = useState("");
   const [quoteAmount, setQuoteAmount] = useState("");
   const [error, setError] = useState("");
+  const [pendingAction, setPendingAction] = useState<BudgetStatus | null>(null);
+  const [addingQuote, setAddingQuote] = useState(false);
 
   useEffect(() => {
     fetch(`/api/budget-requests/${request.id}/quotations`, { cache: "no-store" })
@@ -35,35 +38,45 @@ export function BudgetRequestItem({
 
   async function setStatus(status: "approved" | "rejected") {
     setError("");
-    const res = await fetch(`/api/budget-requests/${request.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    if (res.ok) {
-      onStatusChange(status);
-    } else {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error || "Couldn't update status");
+    setPendingAction(status);
+    try {
+      const res = await fetch(`/api/budget-requests/${request.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        onStatusChange(status);
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error || "Couldn't update status");
+      }
+    } finally {
+      setPendingAction(null);
     }
   }
 
   async function addQuotation(e: React.FormEvent) {
     e.preventDefault();
     if (!vendor.trim() || !quoteAmount) return;
-    const res = await fetch(`/api/budget-requests/${request.id}/quotations`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ vendor, amount: Number(quoteAmount) }),
-    });
-    if (res.ok) {
-      const q: Quotation = await res.json();
-      setQuotations((prev) => [q, ...prev]);
-      setVendor("");
-      setQuoteAmount("");
-    } else {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error || "Couldn't add quotation");
+    setAddingQuote(true);
+    try {
+      const res = await fetch(`/api/budget-requests/${request.id}/quotations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vendor, amount: Number(quoteAmount) }),
+      });
+      if (res.ok) {
+        const q: Quotation = await res.json();
+        setQuotations((prev) => [q, ...prev]);
+        setVendor("");
+        setQuoteAmount("");
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error || "Couldn't add quotation");
+      }
+    } finally {
+      setAddingQuote(false);
     }
   }
 
@@ -80,11 +93,25 @@ export function BudgetRequestItem({
           <Badge tone={STATUS_TONE[request.status]}>{request.status}</Badge>
           {request.status === "pending" && (
             <>
-              <button type="button" onClick={() => setStatus("approved")} className="v2-btn v2-btn-secondary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
-                Approve
+              <button
+                type="button"
+                onClick={() => setStatus("approved")}
+                disabled={pendingAction !== null || addingQuote}
+                className={`v2-btn v2-btn-secondary ${pendingAction === "approved" ? "v2-btn-busy" : ""}`}
+                style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+              >
+                {pendingAction === "approved" && <Spinner size={11} />}
+                {pendingAction === "approved" ? "Approving…" : "Approve"}
               </button>
-              <button type="button" onClick={() => setStatus("rejected")} className="v2-btn v2-btn-secondary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
-                Reject
+              <button
+                type="button"
+                onClick={() => setStatus("rejected")}
+                disabled={pendingAction !== null || addingQuote}
+                className={`v2-btn v2-btn-secondary ${pendingAction === "rejected" ? "v2-btn-busy" : ""}`}
+                style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+              >
+                {pendingAction === "rejected" && <Spinner size={11} />}
+                {pendingAction === "rejected" ? "Rejecting…" : "Reject"}
               </button>
             </>
           )}
@@ -104,8 +131,14 @@ export function BudgetRequestItem({
         <form onSubmit={addQuotation} style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
           <Input placeholder="Vendor" value={vendor} onChange={(e) => setVendor(e.target.value)} style={{ flex: "1 1 140px", fontSize: "0.8rem" }} />
           <Input type="number" min="0" step="0.01" placeholder="Amount" value={quoteAmount} onChange={(e) => setQuoteAmount(e.target.value)} style={{ maxWidth: 110, fontSize: "0.8rem" }} />
-          <button type="submit" className="v2-btn v2-btn-secondary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
-            Add quote
+          <button
+            type="submit"
+            disabled={addingQuote || pendingAction !== null}
+            className={`v2-btn v2-btn-secondary ${addingQuote ? "v2-btn-busy" : ""}`}
+            style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+          >
+            {addingQuote && <Spinner size={11} />}
+            {addingQuote ? "Adding…" : "Add quote"}
           </button>
         </form>
       </div>

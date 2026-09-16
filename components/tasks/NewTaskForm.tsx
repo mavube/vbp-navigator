@@ -86,7 +86,7 @@ export function NewTaskForm({
         Due (optional)
         <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ width: 150 }} />
       </label>
-      <Button type="submit" disabled={busy || !serviceId || !title.trim()} style={{ alignSelf: "flex-end" }}>
+      <Button type="submit" loading={busy} disabled={!serviceId || !title.trim()} style={{ alignSelf: "flex-end" }}>
         {busy ? "Adding…" : "Add task"}
       </Button>
       {error && <p style={{ color: "var(--v2-danger)", width: "100%", margin: 0 }}>{error}</p>}

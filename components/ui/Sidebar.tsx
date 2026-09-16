@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useNavProgress } from "@/components/ui/NavProgress";
 import {
   IconArchitecture,
   IconBudget,
@@ -71,10 +72,25 @@ const GROUPS: NavGroup[] = [
   },
 ];
 
-function NavContent({ pathname, onNavigate }: { pathname: string; onNavigate: () => void }) {
+function NavContent({
+  pathname,
+  onNavigate,
+  startNav,
+}: {
+  pathname: string;
+  onNavigate: () => void;
+  startNav: (href: string) => void;
+}) {
   return (
     <>
-      <Link href="/" className="v2-sidebar-brand" onClick={onNavigate}>
+      <Link
+        href="/"
+        className="v2-sidebar-brand"
+        onClick={() => {
+          startNav("/");
+          onNavigate();
+        }}
+      >
         VBP <span>Navigator</span>
       </Link>
       <nav className="v2-sidebar-nav">
@@ -88,7 +104,10 @@ function NavContent({ pathname, onNavigate }: { pathname: string; onNavigate: ()
                 <Link
                   key={link.href}
                   href={link.href}
-                  onClick={onNavigate}
+                  onClick={() => {
+                    startNav(link.href);
+                    onNavigate();
+                  }}
                   className={`v2-sidebar-link ${active ? "v2-sidebar-link-active" : ""}`}
                 >
                   <Icon className="v2-sidebar-icon" />
@@ -106,10 +125,19 @@ function NavContent({ pathname, onNavigate }: { pathname: string; onNavigate: ()
 export function Sidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const start = useNavProgress();
 
   // Close the mobile drawer on route change rather than leaving it open
   // over the new page (same behavior the old TopNav had).
   useEffect(() => setOpen(false), [pathname]);
+
+  // Only fire the progress bar for a link that's actually going
+  // somewhere new — clicking the page you're already on won't produce
+  // a pathname change for NavProgressProvider to clear it on, so it'd
+  // otherwise sit there until its safety timeout.
+  function startNav(href: string) {
+    if (href !== pathname) start();
+  }
 
   // Public, unauthenticated pages (Phase 4's /apply, /assess) and /login
   // keep no app chrome at all — same exemption the old TopNav made, for
@@ -129,7 +157,7 @@ export function Sidebar() {
         >
           {open ? <IconClose /> : <IconMenu />}
         </button>
-        <Link href="/" className="v2-mobilebar-brand">
+        <Link href="/" className="v2-mobilebar-brand" onClick={() => startNav("/")}>
           VBP <span>Navigator</span>
         </Link>
       </header>
@@ -137,7 +165,7 @@ export function Sidebar() {
       {open && <div className="v2-sidebar-backdrop" onClick={() => setOpen(false)} />}
 
       <aside className={`v2-sidebar ${open ? "v2-sidebar-open" : ""}`}>
-        <NavContent pathname={pathname} onNavigate={() => setOpen(false)} />
+        <NavContent pathname={pathname} onNavigate={() => setOpen(false)} startNav={startNav} />
       </aside>
     </>
   );

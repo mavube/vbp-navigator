@@ -477,3 +477,55 @@
 }
 .v2-public-success h1 { margin-bottom: var(--v2-space-2); }
 .v2-public-success p { color: var(--v2-text-muted); font-size: var(--v2-text-sm); }
+
+/* ------------------------------------------------- responsiveness pass */
+/* Nav-transition progress bar (NavProgress.tsx) — immediate feedback on
+   any sidebar link click, independent of how long the actual network
+   round trip to a distant region takes. Indeterminate slide rather than
+   a simulated percentage, since there's no reliable "% done" signal
+   available from a client component watching App Router navigation. */
+.v2-nav-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 200;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.v2-nav-progress-active { opacity: 1; }
+.v2-nav-progress::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -35%;
+  height: 100%;
+  width: 35%;
+  background: var(--v2-accent);
+  border-radius: 0 2px 2px 0;
+  animation: v2-nav-progress-slide 1.1s ease-in-out infinite;
+}
+.v2-nav-progress-active::before { animation-play-state: running; }
+.v2-nav-progress:not(.v2-nav-progress-active)::before { animation-play-state: paused; }
+@keyframes v2-nav-progress-slide {
+  0% { left: -35%; }
+  100% { left: 100%; }
+}
+
+/* Busy-button state — an action button shows this the instant it's
+   clicked (synchronous state update, not waiting on the network), so a
+   click always has an immediate visual response even on a slow or
+   distant connection. Applied alongside the existing .v2-btn classes. */
+.v2-btn[disabled] { opacity: 0.7; cursor: default; }
+.v2-btn-busy { display: inline-flex; align-items: center; gap: 6px; }
+.v2-spinner { animation: v2-spin 0.7s linear infinite; }
+@keyframes v2-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .v2-nav-progress::before { animation: none; left: 0; width: 100%; }
+  .v2-spinner { animation: none; }
+}

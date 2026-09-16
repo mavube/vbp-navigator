@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Section } from "@/components/ui/Section";
+import { Spinner } from "@/components/ui/Spinner";
 import type { Blocker, BlockerImpact, ServiceOption, Task } from "@/components/tasks/types";
 
 const IMPACT_TONE: Record<BlockerImpact, "neutral" | "accent" | "warning" | "danger"> = {
@@ -122,7 +123,12 @@ export function BlockersPanel({
           className="v2-input"
           style={{ flex: "1 1 220px" }}
         />
-        <button type="submit" disabled={busy || !serviceId || !title.trim()} className="v2-btn v2-btn-primary">
+        <button
+          type="submit"
+          disabled={busy || resolvingId !== null || !serviceId || !title.trim()}
+          className={`v2-btn v2-btn-primary ${busy ? "v2-btn-busy" : ""}`}
+        >
+          {busy && <Spinner />}
           {busy ? "Reporting…" : "Report blocker"}
         </button>
         {error && <p style={{ color: "var(--v2-danger)", width: "100%", margin: 0 }}>{error}</p>}
@@ -147,7 +153,14 @@ export function BlockersPanel({
                   </div>
                   <div style={{ display: "flex", gap: "var(--v2-space-2)", alignItems: "center" }}>
                     <Badge tone={IMPACT_TONE[b.impact]}>{IMPACT_LABEL[b.impact]}</Badge>
-                    <button type="button" onClick={() => resolve(b.id)} disabled={resolvingId === b.id} className="v2-btn v2-btn-secondary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => resolve(b.id)}
+                      disabled={resolvingId !== null || busy}
+                      className={`v2-btn v2-btn-secondary ${resolvingId === b.id ? "v2-btn-busy" : ""}`}
+                      style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+                    >
+                      {resolvingId === b.id && <Spinner size={11} />}
                       {resolvingId === b.id ? "Resolving…" : "Mark resolved"}
                     </button>
                   </div>
