@@ -7,7 +7,7 @@ import { VersionBadge } from "@/components/ui/VersionBadge";
 import { AppShell } from "@/components/ui/AppShell";
 
 export const metadata: Metadata = {
-  title: "VBP Navigator OS",
+  title: "VBP Navigator OS ",
   description:
     "Service management on the ValueBlueprint® method — Service & Value Architecture, tasks, pipeline, budget, and more.",
   manifest: "/manifest.json",
