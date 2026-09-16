@@ -105,6 +105,10 @@
   max-width: var(--v2-container);
   margin: 0 auto;
   padding: var(--v2-space-10) var(--v2-space-6) var(--v2-space-10);
+  min-height: calc(100dvh - 61px);
+  background: var(--v2-bg);
+  font-family: var(--v2-font);
+  color: var(--v2-text);
 }
 .v2-page-header { margin-bottom: var(--v2-space-8); }
 .v2-page-header h1 {

@@ -1,41 +1,44 @@
-# Phase 1 — Design System Foundation (2026-09-16)
+# Phase 2 — Service Catalogue + Graph — apply instructions
 
-Verified with a clean `npm run build` and a Playwright screenshot pass
-(desktop + mobile) against a local dev server. See the build guide's
-new "v3.0 roadmap — Phase 1" section for full detail.
+v3.0 roadmap, Phase 2. Replaces the old static v1.0 "Service Architecture" tab on the
+root `/` page with a live view computed from the real `services` table.
 
-## Files in this package (all at their normal repo path)
+## 1. Run the new migration against your real Supabase project
 
-    styles/design-tokens.css          — new palette/type-scale/shadows (values only, same variable names)
-    styles/components.css             — polished button/card/badge/input + new page-shell/nav/login styles
-    components/ui/TopNav.tsx           — rebuilt nav: brand mark, active pill, mobile hamburger menu
-    components/ui/Page.tsx             — NEW shared page-layout component
-    app/tasks/page.tsx                 — now uses <Page>
-    app/pipeline/page.tsx              — now uses <Page>
-    app/classes/page.tsx               — now uses <Page>
-    app/budget/page.tsx                — now uses <Page>
-    app/compensation/page.tsx          — now uses <Page>
-    app/service-requests/page.tsx      — now uses <Page>
-    app/capabilities/page.tsx          — now uses <Page>
-    app/login/page.tsx                 — rebuilt on the v2.0 token set (was still on v1.0 legacy classes)
+`supabase/migrations/0011_phase2_v3_catalogue.sql` — adds five nullable-safe text
+columns to `services`: `description`, `customer_need`, `target_customer`,
+`delivery_model`, `commercial_model`. Pure additive, safe against existing rows.
 
-## What did NOT change
-The root "/" Service Architecture page (components/ServiceCards.tsx and
-friends) is untouched — it's still v1.0's static content on the old
-token set. That's deliberate: it's Phase 2's job (Service Catalogue +
-Graph) to replace it, not this phase's, and you confirmed it should go
-away once that happens.
+Run it in the Supabase SQL editor (or via your usual migration path) **before**
+deploying the code below, or after — order doesn't matter functionally, but the new
+catalogue fields will show blank in the UI until both the column and the code are in
+place. **This is the one step that must not be skipped** — without it, the Service
+Catalogue's new fields simply won't have anywhere to read from in production
+(local SQLite dev doesn't need this step — it creates its own columns automatically).
 
-## To apply
-Copy these files into your repo at the same paths (overwriting the
-existing ones, except Page.tsx which is new), commit, push via GitHub
-Desktop as before. Vercel will redeploy automatically.
+## 2. Replace these files in your repo (same relative paths)
 
-## After deploying
-Worth a quick look on a real phone/browser: the Inter font loads via a
-CSS @import (same pattern v1.0 already used successfully), which
-should work fine on a normal internet connection even though it
-couldn't be independently confirmed loading inside this session's own
-restricted sandbox network. If it doesn't load for some reason, the
-fallback system-font stack still looks solid on its own — nothing
-breaks either way.
+- `lib/db-services.ts` — replaces the whole file
+- `lib/findings-data.ts` — replaces the whole file (content-only change: Findings 2/3 text)
+- `components/architecture/ServiceGraph.tsx` — **new file**
+- `components/architecture/ServiceCatalogue.tsx` — **new file**
+- `components/architecture/ArchitectureView.tsx` — **new file**
+- `app/page.tsx` — replaces the whole file
+- `styles/components.css` — replaces the whole file (adds background/font/color to `.v2-page-shell`; everything else unchanged from Phase 1)
+- `claude/vbp-navigator-os-v2-build-guide.md` — replaces the whole file (documentation only; already synced to the Claude project too)
+
+## 3. Delete these files — confirmed dead, no remaining references (grepped first)
+
+- `components/NavigatorApp.tsx`
+- `components/ServiceCards.tsx`
+- `components/InternalChain.tsx`
+
+## 4. After deploying
+
+- Clear `.next` and rebuild if you see a stale route error (`npm run build`, clearing
+  the cache first) — this bit us twice in this sandbox after deleting route/component
+  files, unrelated to your setup but worth knowing.
+- The root `/` page's "Internal Operation" tab will now show a live dependency graph
+  and full catalogue cards for whatever is actually in your `services` table. The
+  "Reference Case — GDC PMP" tab is untouched — still the fixed static reference
+  content.
