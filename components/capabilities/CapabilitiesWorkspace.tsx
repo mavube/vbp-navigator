@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { WorkloadView } from "@/components/capabilities/WorkloadView";
 import { OutcomesView } from "@/components/capabilities/OutcomesView";
-import type { ServiceOption, ServiceRollup, PersonWorkload } from "@/components/capabilities/types";
+import type { ServiceOption, ServiceRollup, PersonWorkload, FiscalYearTotals } from "@/components/capabilities/types";
 
 type Tab = "workload" | "outcomes";
 const TABS: Array<{ key: Tab; label: string }> = [
@@ -16,22 +16,32 @@ export function CapabilitiesWorkspace() {
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [rollups, setRollups] = useState<ServiceRollup[]>([]);
   const [byPerson, setByPerson] = useState<PersonWorkload[]>([]);
+  const [fiscalYears, setFiscalYears] = useState<FiscalYearTotals[]>([]);
+  // undefined = all-time (the pre-Phase-3 default, unchanged). A
+  // specific year scopes Outcomes' financial stats (Budget approved /
+  // Expenses / Net pay) to that fiscal year — operational stats
+  // (tasks/leads/classes) stay all-time regardless, per lib/rollups.ts.
+  const [fiscalYear, setFiscalYear] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    setLoading(true);
+    const rollupsUrl = fiscalYear ? `/api/rollups?fy=${fiscalYear}` : "/api/rollups";
     Promise.all([
       fetch("/api/services", { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
-      fetch("/api/rollups", { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
+      fetch(rollupsUrl, { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
     ])
       .then(([servicesData, rollupsData]) => {
         setServices(servicesData);
         setRollups(rollupsData.services);
         setByPerson(rollupsData.byPerson);
+        setFiscalYears(rollupsData.fiscalYears);
+        setError("");
       })
       .catch(() => setError("Couldn't load capabilities data — try refreshing."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [fiscalYear]);
 
   if (loading) return <p style={{ color: "var(--v2-text-muted)" }}>Loading…</p>;
   if (error) return <p style={{ color: "var(--v2-danger)" }}>{error}</p>;
@@ -68,7 +78,13 @@ export function CapabilitiesWorkspace() {
       ) : tab === "workload" ? (
         <WorkloadView services={services} rollups={rollups} byPerson={byPerson} />
       ) : (
-        <OutcomesView services={services} rollups={rollups} />
+        <OutcomesView
+          services={services}
+          rollups={rollups}
+          fiscalYears={fiscalYears}
+          fiscalYear={fiscalYear}
+          onFiscalYearChange={setFiscalYear}
+        />
       )}
     </div>
   );

@@ -27,3 +27,12 @@ export interface PersonWorkload {
   name: string;
   activeTasks: number;
 }
+
+// v3.0 roadmap Phase 3 — matches lib/rollups.ts's FiscalYearTotals.
+export interface FiscalYearTotals {
+  fiscalYear: number;
+  label: string;
+  budgetApprovedTotal: number;
+  expensesTotal: number;
+  compensationNetPayTotal: number;
+}
