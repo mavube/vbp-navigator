@@ -59,22 +59,24 @@ export async function POST() {
 
   let responseText: string;
   try {
-    // The trailing assistant-role message with a literal "{" is a
-    // standard Claude prefill technique for biasing the completion
-    // toward valid JSON with no wrapper prose — the model continues
-    // from that character rather than starting a fresh turn, so the
-    // "{" is prepended back on below before parsing.
+    // NOTE: this model/account does not support assistant message
+    // prefill — the API rejects a trailing assistant-role message
+    // with "The conversation must end with a user message." So there
+    // is no "{" to bias the completion; the system prompt's "Respond
+    // with ONLY the JSON object" instruction is the only thing
+    // steering the model toward raw JSON, and the parsing below is
+    // hardened to strip a markdown code fence defensively in case the
+    // model wraps its output in one despite that instruction.
     const message = await client.messages.create({
       model: AI_MODEL,
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       messages: [
         { role: "user", content: `Organization snapshot (JSON):\n${JSON.stringify(snapshot, null, 2)}` },
-        { role: "assistant", content: "{" },
       ],
     });
     const block = message.content[0];
-    responseText = "{" + (block && block.type === "text" ? block.text : "");
+    responseText = block && block.type === "text" ? block.text : "";
   } catch (err) {
     console.error("AI Operating Layer call failed:", err);
     // Surface the Anthropic API's own error type/status rather than a
@@ -92,10 +94,15 @@ export async function POST() {
     return NextResponse.json({ error: "The AI service didn't respond — try again in a moment." }, { status: 502 });
   }
 
+  // Defensive: strip a ```json ... ``` or ``` ... ``` fence if the model
+  // wraps its output in one despite the system prompt saying not to.
+  const fenceMatch = responseText.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/);
+  const candidateText = fenceMatch ? fenceMatch[1] : responseText;
+
   let parsed: { observations?: string; connections?: string[]; recommendations?: string[] } = {};
   let raw: string | undefined;
   try {
-    parsed = JSON.parse(responseText);
+    parsed = JSON.parse(candidateText);
   } catch {
     raw = responseText;
   }

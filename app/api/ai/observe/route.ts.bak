@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { APIError } from "@anthropic-ai/sdk";
 import { getCurrentOrgId } from "@/lib/current-org";
 import { buildAiOrgSnapshot } from "@/lib/ai-context";
 import { getAnthropicClient, AiNotConfiguredError, AI_MODEL } from "@/lib/ai-client";
@@ -76,6 +77,18 @@ export async function POST() {
     responseText = "{" + (block && block.type === "text" ? block.text : "");
   } catch (err) {
     console.error("AI Operating Layer call failed:", err);
+    // Surface the Anthropic API's own error type/status rather than a
+    // single generic message — this app is internal to a 5-person org,
+    // not customer-facing, so "401 authentication_error" or "402
+    // billing_error" shown directly saves a trip to Vercel's function
+    // logs to find out the key is wrong or billing isn't set up, which
+    // is the single most likely first-run failure mode for this phase.
+    if (err instanceof APIError) {
+      return NextResponse.json(
+        { error: `The AI service returned an error (${err.status} ${err.type ?? "unknown"}): ${err.message}` },
+        { status: 502 }
+      );
+    }
     return NextResponse.json({ error: "The AI service didn't respond — try again in a moment." }, { status: 502 });
   }
 
