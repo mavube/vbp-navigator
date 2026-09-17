@@ -61,6 +61,17 @@ export function canApproveBudget(ctx: UserContext): boolean {
   return ctx.roles.some((r) => r.role === "org_admin" || r.role === "budget_approver");
 }
 
+// Phase 14 — gates Company Settings (org_settings) edits. Same
+// authority as the Supabase RLS policy in migration 0020
+// (org_settings_insert/update: has_role('org_admin')) — legal/bank
+// details on every generated invoice are exactly the kind of
+// organization-wide, high-consequence setting Org Admin already gates
+// everywhere else in this app.
+export function canManageOrgSettings(ctx: UserContext): boolean {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return true; // local dev: no gate
+  return ctx.roles.some((r) => r.role === "org_admin");
+}
+
 // Resolves a display name for byline-style fields (a comment's author,
 // a service request's requester) that are denormalized at write time
 // rather than always joined from `profiles` — see

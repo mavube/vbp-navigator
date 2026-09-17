@@ -13,6 +13,7 @@ import {
   IconClasses,
   IconClose,
   IconCollapse,
+  IconCommercial,
   IconCompensation,
   IconCustomers,
   IconDashboard,
@@ -22,6 +23,7 @@ import {
   IconPipeline,
   IconProspects,
   IconRequests,
+  IconSettings,
   IconSignOut,
   IconTasks,
 } from "@/components/ui/icons";
@@ -41,6 +43,8 @@ const NAV_ICONS: Record<string, (props: { className?: string }) => JSX.Element> 
   "/prospects": IconProspects,
   "/customers": IconCustomers,
   "/documents": IconDocuments,
+  "/commercial": IconCommercial,
+  "/settings/company": IconSettings,
 };
 
 type NavGroup = { label: string; links: NavLinkMeta[] };

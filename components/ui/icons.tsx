@@ -159,6 +159,29 @@ export function IconMemory(props: IconProps) {
   );
 }
 
+// Phase 14 (production readiness, Area 1) — the /commercial nav entry.
+// A receipt with a currency mark, distinct from IconDocuments' plain
+// sheet, since Commercial Docs are specifically money-bearing.
+export function IconCommercial(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6 3.5h12v17l-2.5-1.5L13 20.5l-2.5-1.5L8 20.5l-2-1.5V3.5Z" />
+      <path d="M12 7.5v9M14.3 9c-.4-.5-1.2-.9-2.3-.9-1.3 0-2.4.6-2.4 1.7 0 2.2 4.7 1 4.7 3.2 0 1.1-1.1 1.7-2.4 1.7-1.1 0-2-.4-2.4-.9" />
+    </svg>
+  );
+}
+
+// Phase 14 — the /settings/company nav entry (a plain gear, the usual
+// settings mark).
+export function IconSettings(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M19.4 13.6a1.7 1.7 0 0 0 .34 1.87l.06.06a2.06 2.06 0 1 1-2.92 2.92l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V19.8a2.06 2.06 0 0 1-4.12 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2.06 2.06 0 1 1-2.92-2.92l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H4.2a2.06 2.06 0 0 1 0-4.12h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2.06 2.06 0 1 1 2.92-2.92l.06.06a1.7 1.7 0 0 0 1.87.34H10.4a1.7 1.7 0 0 0 1.03-1.56V4.2a2.06 2.06 0 0 1 4.12 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2.06 2.06 0 1 1 2.92 2.92l-.06.06a1.7 1.7 0 0 0-.34 1.87V10.4a1.7 1.7 0 0 0 1.56 1.03h.09a2.06 2.06 0 0 1 0 4.12h-.09a1.7 1.7 0 0 0-1.56 1.03Z" />
+    </svg>
+  );
+}
+
 export function IconMenu(props: IconProps) {
   return (
     <svg {...base} {...props}>

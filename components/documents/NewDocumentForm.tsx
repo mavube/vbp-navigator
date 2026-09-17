@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { DOCUMENT_TYPE_LABELS, PRE_ADMISSION_TYPES, type DocumentType } from "@/lib/document-templates";
+import { DOCUMENT_TYPE_LABELS, PRE_ADMISSION_TYPES, COMMERCIAL_TYPES, type DocumentType } from "@/lib/document-templates";
 import type { DocumentRecord, LeadOption, EngagementOption, CustomerOption, ServiceOption } from "@/components/documents/types";
 
-const TYPES = Object.keys(DOCUMENT_TYPE_LABELS) as DocumentType[];
+// Proposal/Quotation/Invoice live in the Commercial Docs module now
+// (Phase 14) — this form only offers the five plain letter types.
+const TYPES = (Object.keys(DOCUMENT_TYPE_LABELS) as DocumentType[]).filter((t) => !COMMERCIAL_TYPES.has(t));
 
 export function NewDocumentForm({
   services,
@@ -21,7 +23,7 @@ export function NewDocumentForm({
   customers: CustomerOption[];
   onCreated: (doc: DocumentRecord) => void;
 }) {
-  const [docType, setDocType] = useState<DocumentType>("proposal");
+  const [docType, setDocType] = useState<DocumentType>("invitation");
   const [leadId, setLeadId] = useState("");
   const [engagementId, setEngagementId] = useState("");
   const [details, setDetails] = useState("");

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listDocuments, createDocument } from "@/lib/db-documents";
+import { listDocumentsByTypes, createDocument } from "@/lib/db-documents";
 import { resolveDocumentAnchor } from "@/lib/document-context";
 import { renderDocument, PRE_ADMISSION_TYPES, type DocumentType } from "@/lib/document-templates";
 import { getOrgName } from "@/lib/organizations";
@@ -7,8 +7,12 @@ import { getUserContext, canManageService, resolveDisplayName } from "@/lib/perm
 
 export const dynamic = "force-dynamic";
 
+// Phase 14: proposal/quotation/invoice moved to the commercial-document
+// flow (app/api/commercial-documents) — money-bearing, chainable, with
+// their own 8-state lifecycle. This route keeps its original five plain
+// letter types, unchanged.
 const VALID_TYPES: DocumentType[] = [
-  "proposal", "quotation", "invitation", "approval_request",
+  "invitation", "approval_request",
   "confirmation", "admission_communication", "completion_record",
 ];
 
@@ -16,7 +20,7 @@ const VALID_TYPES: DocumentType[] = [
 // org-wide visibility as everything else.
 export async function GET() {
   const ctx = await getUserContext();
-  const documents = await listDocuments(ctx.orgId);
+  const documents = await listDocumentsByTypes(ctx.orgId, VALID_TYPES);
   return NextResponse.json(documents);
 }
 

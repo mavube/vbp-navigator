@@ -16,6 +16,7 @@
 export type DocumentType =
   | "proposal"
   | "quotation"
+  | "invoice"
   | "invitation"
   | "approval_request"
   | "confirmation"
@@ -25,6 +26,7 @@ export type DocumentType =
 export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   proposal: "Proposal",
   quotation: "Quotation",
+  invoice: "Invoice",
   invitation: "Invitation",
   approval_request: "Approval Request",
   confirmation: "Confirmation",
@@ -32,11 +34,25 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   completion_record: "Completion Record",
 };
 
+// Phase 14 (production readiness, Area 1): proposal/quotation/invoice
+// are "commercial documents" — money-bearing, chainable (one can be
+// converted from another, see lib/db-documents.ts's convertDocument),
+// and independently startable (an invoice doesn't need a prior
+// proposal or quotation to exist — a phone/email order can go straight
+// to Invoice). They use the 8-state commercial lifecycle
+// (draft/generated/under_review/approved/issued/sent/delivered/
+// acknowledged) and the amount/line_items/payment columns added in
+// migration 0020, not the plain 4-state draft/pending_approval/
+// approved/rejected flow the other five types still use.
+export const COMMERCIAL_TYPES: ReadonlySet<DocumentType> = new Set(["proposal", "quotation", "invoice"]);
+
 // Pre-admission types can be generated against a Lead (no Customer
 // exists yet); post-admission types need a real Engagement. Used both
 // to validate on the server and to drive which anchor picker the UI
-// shows for a given type.
-export const PRE_ADMISSION_TYPES: ReadonlySet<DocumentType> = new Set(["proposal", "quotation", "invitation", "approval_request"]);
+// shows for a given type. Commercial types (above) are exempt from
+// this pre/post split entirely — they can anchor to a lead, an
+// engagement, a customer directly, or nothing at all.
+export const PRE_ADMISSION_TYPES: ReadonlySet<DocumentType> = new Set(["invitation", "approval_request"]);
 export const POST_ADMISSION_TYPES: ReadonlySet<DocumentType> = new Set(["confirmation", "admission_communication", "completion_record"]);
 
 export interface DocumentContext {
@@ -84,6 +100,21 @@ function quotation(ctx: DocumentContext) {
       ctx.details ? `Pricing and terms:\n${ctx.details}` : "Pricing and terms: to be confirmed.",
       `This quotation is provided by ${ctx.orgName} and is valid until otherwise noted or renewed.`,
       `Please let us know if you have any questions or would like to proceed.`,
+      `Regards,\n${ctx.orgName}`,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+  };
+}
+
+function invoice(ctx: DocumentContext) {
+  return {
+    title: `Invoice: ${ctx.serviceName} for ${ctx.recipientName}`,
+    body: [
+      `Dear ${ctx.recipientName},`,
+      `Please find attached our invoice for ${ctx.serviceName}. The itemized amount due and payment link are on the invoice itself.`,
+      ctx.details ? `Notes:\n${ctx.details}` : "",
+      `Thank you for your business.`,
       `Regards,\n${ctx.orgName}`,
     ]
       .filter(Boolean)
@@ -164,6 +195,7 @@ function completionRecord(ctx: DocumentContext) {
 const TEMPLATES: Record<DocumentType, (ctx: DocumentContext) => { title: string; body: string }> = {
   proposal,
   quotation,
+  invoice,
   invitation,
   approval_request: approvalRequest,
   confirmation,
