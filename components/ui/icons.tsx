@@ -41,6 +41,19 @@ export function IconDashboard(props: IconProps) {
   );
 }
 
+// v3.0 roadmap Phase 8 — the /advisor nav entry. A simple spark/star,
+// distinct from every other glyph in this set (all outline shapes of
+// real-world objects) on purpose, since this is the one screen backed
+// by a model rather than a live database query.
+export function IconAdvisor(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 3.5c.7 3 1.8 4.1 4.8 4.8-3 .7-4.1 1.8-4.8 4.8-.7-3-1.8-4.1-4.8-4.8 3-.7 4.1-1.8 4.8-4.8Z" />
+      <path d="M18.5 14c.4 1.7 1 2.3 2.7 2.7-1.7.4-2.3 1-2.7 2.7-.4-1.7-1-2.3-2.7-2.7 1.7-.4 2.3-1 2.7-2.7Z" />
+    </svg>
+  );
+}
+
 export function IconTasks(props: IconProps) {
   return (
     <svg {...base} {...props}>

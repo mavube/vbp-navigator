@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useNavProgress } from "@/components/ui/NavProgress";
 import {
+  IconAdvisor,
   IconArchitecture,
   IconBudget,
   IconCapabilities,
@@ -47,6 +48,7 @@ const GROUPS: NavGroup[] = [
     links: [
       { href: "/dashboard", label: "Dashboard", icon: IconDashboard },
       { href: "/", label: "Architecture", icon: IconArchitecture },
+      { href: "/advisor", label: "Advisor", icon: IconAdvisor },
     ],
   },
   {
