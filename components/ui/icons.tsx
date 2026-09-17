@@ -180,3 +180,55 @@ export function IconMoon(props: IconProps) {
     </svg>
   );
 }
+
+// v3.0 roadmap Phase 11 (Cluster D) — the Sidebar collapse/rail toggle.
+export function IconCollapse(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3.5" y="4" width="17" height="16" rx="2.5" />
+      <path d="M9.5 4v16" />
+      <path d="M15.5 9.5 13 12l2.5 2.5" />
+    </svg>
+  );
+}
+
+// v3.0 roadmap Phase 11 (Cluster D) — the Sidebar identity block's
+// sign-out control and Topbar's identity menu.
+export function IconSignOut(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3" />
+      <path d="M16 16l4-4-4-4" />
+      <path d="M20 12H9" />
+    </svg>
+  );
+}
+
+// v3.0 roadmap Phase 11 (Cluster D) — the Topbar's global search field.
+export function IconSearch(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m20 20-4.35-4.35" />
+    </svg>
+  );
+}
+
+// v3.0 roadmap Phase 11 (Cluster D) — the Topbar's quick-add menu.
+export function IconPlus(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 4.5v15M4.5 12h15" />
+    </svg>
+  );
+}
+
+// v3.0 roadmap Phase 11 (Cluster D) — the Topbar's notifications bell.
+export function IconBell(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6 9a6 6 0 1 1 12 0c0 4 1.5 5.5 1.5 5.5h-15S6 13 6 9Z" />
+      <path d="M10 18.5a2 2 0 0 0 4 0" />
+    </svg>
+  );
+}

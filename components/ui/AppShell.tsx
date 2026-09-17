@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { ReactNode } from "react";
 import { Sidebar } from "@/components/ui/Sidebar";
+import { Topbar } from "@/components/ui/Topbar";
 import { NavProgressProvider } from "@/components/ui/NavProgress";
 
 // v3.0 Phase 6a (UI/UX modernization). Wraps every page in the sidebar
@@ -29,7 +30,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     <NavProgressProvider>
       <div className="v2-shell">
         <Sidebar />
-        <div className="v2-shell-main">{children}</div>
+        <div className="v2-shell-main">
+          <Topbar />
+          {children}
+        </div>
       </div>
     </NavProgressProvider>
   );

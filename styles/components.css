@@ -184,6 +184,7 @@
   border-right: 1px solid var(--v2-border);
   padding: var(--v2-space-6) var(--v2-space-4);
   z-index: 30;
+  transition: width var(--v2-transition);
 }
 .v2-sidebar-brand {
   display: block;
@@ -230,6 +231,52 @@
 .v2-sidebar-link-active { color: var(--v2-accent); background: var(--v2-accent-soft); font-weight: var(--v2-weight-semibold); }
 .v2-sidebar-icon { flex-shrink: 0; opacity: 0.85; }
 .v2-sidebar-link-active .v2-sidebar-icon { opacity: 1; }
+
+/* v3.0 roadmap Phase 11 (Cluster D) — collapse/rail mode and live
+   badges. .v2-sidebar-collapsed narrows the rail to icons-only;
+   .v2-sidebar-link-collapsed centers each icon within it. */
+.v2-sidebar-collapsed { width: 72px; padding-left: var(--v2-space-2); padding-right: var(--v2-space-2); }
+.v2-sidebar-collapsed .v2-sidebar-nav { align-items: center; }
+.v2-sidebar-link-collapsed { justify-content: center; padding: 8px; }
+.v2-sidebar-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--v2-danger-soft);
+  color: var(--v2-danger);
+  font-size: 0.68rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.v2-sidebar-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--v2-danger);
+  border: 1.5px solid var(--v2-surface);
+}
+.v2-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--v2-radius-sm);
+  border: 1px solid var(--v2-border);
+  background: none;
+  color: var(--v2-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color var(--v2-transition), color var(--v2-transition);
+}
+.v2-icon-btn:hover { color: var(--v2-text); background: var(--v2-surface-sunken); }
 
 .v2-theme-toggle {
   display: flex;
@@ -316,6 +363,10 @@
     z-index: 50;
   }
   .v2-sidebar-open { transform: translateX(0); }
+  /* Collapse/rail mode is a desktop affordance (see Sidebar.tsx's
+     effectiveCollapsed) — the toggle button itself is redundant chrome
+     on the mobile drawer, which is already full-width by design. */
+  .v2-sidebar-collapse-btn { display: none; }
   .v2-sidebar-backdrop {
     display: block;
     position: fixed;
@@ -323,6 +374,141 @@
     background: rgba(15, 23, 42, 0.45);
     z-index: 45;
   }
+}
+
+/* -------------------------------------------------------------- modal */
+/* v3.0 roadmap Phase 11 (Cluster D) — first use is TaskCalendar's
+   click-to-create and click-into-detail panels, but generic enough
+   (a centered card over a dismissible backdrop) for any future need.
+   No portal/library — position:fixed plus a high z-index is enough for
+   a single-level modal, same "no new dependency for a plain component"
+   discipline as the Gantt/Calendar views themselves. */
+.v2-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--v2-space-4);
+  z-index: 100;
+}
+.v2-modal-panel {
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-border);
+  border-radius: var(--v2-radius-md);
+  box-shadow: var(--v2-shadow-lg);
+  padding: var(--v2-space-6);
+  width: 100%;
+  max-width: 420px;
+  max-height: calc(100dvh - var(--v2-space-8));
+  overflow-y: auto;
+}
+
+/* -------------------------------------------------------------- topbar */
+/* v3.0 roadmap Phase 11 (Cluster D) — "Topbar: doesn't exist at all —
+   desktop has zero persistent header." Desktop-only (see Topbar.tsx's
+   own comment on why) — hidden below the same 960px breakpoint
+   Sidebar's mobile drawer already uses, so the two never both claim
+   the same header real estate. */
+.v2-topbar {
+  display: none;
+  align-items: center;
+  gap: var(--v2-space-4);
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  padding: var(--v2-space-3) var(--v2-space-6);
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--v2-border);
+  margin-bottom: var(--v2-space-2);
+}
+:root[data-theme="dark"] .v2-topbar { background: rgba(11, 13, 18, 0.86); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .v2-topbar { background: rgba(11, 13, 18, 0.86); }
+}
+@media (min-width: 961px) {
+  .v2-topbar { display: flex; }
+}
+
+.v2-topbar-left { flex-shrink: 0; }
+.v2-topbar-title {
+  font-family: var(--v2-font);
+  font-weight: var(--v2-weight-bold);
+  font-size: var(--v2-text-lg);
+  color: var(--v2-text);
+  letter-spacing: -0.01em;
+}
+
+.v2-topbar-search { position: relative; flex: 1 1 auto; max-width: 420px; }
+.v2-topbar-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--v2-text-faint);
+  pointer-events: none;
+  width: 16px;
+  height: 16px;
+}
+.v2-topbar-search-input {
+  width: 100%;
+  padding: 8px 10px 8px 34px;
+  border-radius: var(--v2-radius-sm);
+  border: 1px solid var(--v2-border);
+  background: var(--v2-surface-sunken);
+  font-family: var(--v2-font);
+  font-size: var(--v2-text-sm);
+  color: var(--v2-text);
+}
+.v2-topbar-search-input:focus { outline: 2px solid var(--v2-accent); outline-offset: 1px; }
+
+.v2-topbar-right { display: flex; align-items: center; gap: var(--v2-space-2); flex-shrink: 0; margin-left: auto; }
+
+/* A transparent full-viewport catcher closes a dropdown on any outside
+   click — simpler and more robust than a document-level click
+   listener with ref checks, and consistent with the mobile sidebar
+   drawer's own backdrop pattern just above. */
+.v2-topbar-dropdown-catcher { position: fixed; inset: 0; z-index: 90; background: transparent; }
+.v2-topbar-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-border);
+  border-radius: var(--v2-radius-md);
+  box-shadow: var(--v2-shadow-lg);
+  z-index: 95;
+  max-height: 360px;
+  overflow-y: auto;
+  padding: var(--v2-space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.v2-topbar-search-results { min-width: 100%; }
+
+.v2-topbar-result {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 6px var(--v2-space-2);
+  border-radius: var(--v2-radius-sm);
+  font-family: var(--v2-font);
+  font-size: var(--v2-text-sm);
+  color: var(--v2-text);
+  text-decoration: none;
+}
+.v2-topbar-result:hover { background: var(--v2-surface-sunken); }
+.v2-topbar-result-type {
+  font-size: 0.65rem;
+  font-weight: var(--v2-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--v2-text-faint);
 }
 
 /* ----------------------------------------------------------- section */

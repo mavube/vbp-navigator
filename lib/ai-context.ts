@@ -19,11 +19,32 @@ import { computeServiceHealth } from "@/lib/service-health";
 import { listBlockers, type BlockerImpact } from "@/lib/db-blockers";
 import { listTasks } from "@/lib/db-tasks";
 import { listLeads } from "@/lib/db-leads";
+import { listProspects } from "@/lib/db-prospects";
+import { listClasses } from "@/lib/db-classes";
+import { listEnrollments } from "@/lib/db-enrollments";
+import { listDocuments } from "@/lib/db-documents";
+import { listServiceRequests } from "@/lib/db-service-requests";
 import { getOrgName } from "@/lib/organizations";
 
 const MAX_BLOCKERS = 8;
 const MAX_OVERDUE_TASKS = 8;
+const MAX_AGING_ITEMS = 8;
+const MAX_UPCOMING_CLASSES = 8;
 const IMPACT_RANK: Record<BlockerImpact, number> = { critical: 3, high: 2, medium: 1, low: 0 };
+
+// v3.0 roadmap Cluster E (AI Advisor expansion) — the enhancement
+// backlog named five specific blind spots in the Phase 8 snapshot:
+// budget/compensation data entirely, task completion velocity,
+// lead/prospect stage-dwell (aging), class enrollment fill-rate, and
+// document/service-request backlog age. Trend vs. a prior snapshot
+// ("this got worse this week") is deliberately NOT built here — Diallo
+// chose to skip it (2026-09-17) since it depends on the roadmap's own
+// Phase 9 (Organizational Memory, §17), which doesn't exist yet; a
+// point-in-time-only read stays honest rather than faking a trend from
+// nothing to compare against.
+function daysSince(dateStr: string): number {
+  return Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000));
+}
 
 export interface AiOrgSnapshot {
   orgName: string;
@@ -41,16 +62,54 @@ export interface AiOrgSnapshot {
   openBlockers: Array<{ title: string; serviceName: string; impact: BlockerImpact; ownerName: string; requiredAction: string }>;
   overdueTasks: Array<{ title: string; serviceName: string; dueDate: string | null; assigneeName: string }>;
   pipelineByStage: Record<string, number>;
+  // Cluster E additions below — see the module header comment for what
+  // each one closes and why trend/history is deliberately absent.
+  budgetCompensation: {
+    budgetPendingTotal: number;
+    budgetApprovedTotal: number;
+    compensationFinalizedCount: number;
+    compensationNetPayTotal: number;
+  };
+  // Proxy, not a dedicated field: tasks have no separate "completedAt"
+  // timestamp, so a task's own updated_at at the moment its status was
+  // set to done is what's used — the same approximation the rest of
+  // this app makes wherever a status-change timestamp stands in for a
+  // purpose-built one (e.g. a document's updatedAt on approval).
+  taskVelocity: { completedLast7Days: number; completedLast30Days: number };
+  // Leads still actively in the pipeline (not yet admitted/lost),
+  // oldest-in-current-stage first — "stage" not "creation", since a
+  // lead that's been sitting in the same stage for weeks is the actual
+  // signal, not one that's simply been open a while but moving.
+  pipelineAging: Array<{ contactName: string; serviceName: string; stage: string; daysInStage: number }>;
+  // Prospects not yet promoted or declined, oldest-waiting first.
+  prospectAging: Array<{ fullName: string; source: string; status: string; daysWaiting: number }>;
+  // "Fill-rate" (the backlog's own word) turned out not to be buildable
+  // as written: classes have no seat-capacity field anywhere in the
+  // schema (supabase/migrations/0005, 0017) to compute a rate against.
+  // What's real and useful instead: each upcoming/active class's actual
+  // roster size, so the model can flag one that looks thin — the same
+  // "correct the audit's wording against what the schema actually
+  // supports" call this project has made before (e.g. Phase 11's
+  // Calendar/blocker-deadline correction).
+  classEnrollment: Array<{ title: string; serviceName: string; scheduledDate: string | null; enrolledCount: number }>;
+  backlogAge: {
+    documentsOldest: Array<{ docType: string; serviceName: string; status: string; daysOpen: number }>;
+    serviceRequestsOldest: Array<{ title: string; serviceName: string; priority: string; daysOpen: number }>;
+  };
 }
 
 export async function buildAiOrgSnapshot(orgId: string): Promise<AiOrgSnapshot> {
-  const [orgName, services, rollups, kpi, blockers, leads] = await Promise.all([
+  const [orgName, services, rollups, kpi, blockers, leads, prospects, classes, documents, serviceRequests] = await Promise.all([
     getOrgName(orgId),
     listServices(orgId),
     getServiceRollups(orgId),
     getOrgKpiSummary(orgId),
     listBlockers(orgId),
     listLeads(orgId),
+    listProspects(orgId),
+    listClasses(orgId),
+    listDocuments(orgId),
+    listServiceRequests(orgId),
   ]);
 
   const rollupFor = new Map(rollups.map((r) => [r.serviceId, r]));
@@ -114,6 +173,103 @@ export async function buildAiOrgSnapshot(orgId: string): Promise<AiOrgSnapshot> 
     pipelineByStage[lead.stage] = (pipelineByStage[lead.stage] ?? 0) + 1;
   }
 
+  // Budget/compensation — reuses the rollups already fetched above for
+  // health scoring rather than a second set of queries; the amounts are
+  // the exact same numbers Capabilities/Dashboard show, summed org-wide.
+  const budgetCompensation = rollups.reduce(
+    (acc, r) => ({
+      budgetPendingTotal: acc.budgetPendingTotal + r.budgetPendingAmount,
+      budgetApprovedTotal: acc.budgetApprovedTotal + r.budgetApprovedAmount,
+      compensationFinalizedCount: acc.compensationFinalizedCount + r.compensationFinalizedCount,
+      compensationNetPayTotal: acc.compensationNetPayTotal + r.compensationNetPayTotal,
+    }),
+    { budgetPendingTotal: 0, budgetApprovedTotal: 0, compensationFinalizedCount: 0, compensationNetPayTotal: 0 }
+  );
+
+  // Task completion velocity — see this file's AiOrgSnapshot comment on
+  // why updatedAt is the proxy used here.
+  const nowMs = Date.now();
+  const doneTasks = allTasks.filter((t) => t.status === "done");
+  const taskVelocity = {
+    completedLast7Days: doneTasks.filter((t) => nowMs - new Date(t.updatedAt).getTime() <= 7 * 86_400_000).length,
+    completedLast30Days: doneTasks.filter((t) => nowMs - new Date(t.updatedAt).getTime() <= 30 * 86_400_000).length,
+  };
+
+  // Pipeline aging — active leads (not yet admitted/lost), oldest time
+  // in their current stage first. updatedAt is what a stage PATCH bumps
+  // (app/api/leads/[id]/route.ts), so it's the real "time in this
+  // stage" signal, not just "time since creation."
+  const pipelineAging = leads
+    .filter((l) => l.stage !== "admitted" && l.stage !== "lost")
+    .map((l) => ({
+      contactName: l.contactName,
+      serviceName: serviceNameFor.get(l.serviceId) ?? "Unknown service",
+      stage: l.stage,
+      daysInStage: daysSince(l.updatedAt),
+    }))
+    .sort((a, b) => b.daysInStage - a.daysInStage)
+    .slice(0, MAX_AGING_ITEMS);
+
+  // Prospect aging — not yet promoted or declined, oldest-waiting first.
+  const prospectAging = prospects
+    .filter((p) => p.status === "new" || p.status === "reviewed")
+    .map((p) => ({
+      fullName: p.fullName || "(no name given)",
+      source: p.source,
+      status: p.status,
+      daysWaiting: daysSince(p.createdAt),
+    }))
+    .sort((a, b) => b.daysWaiting - a.daysWaiting)
+    .slice(0, MAX_AGING_ITEMS);
+
+  // Class enrollment — see the AiOrgSnapshot comment on why this is
+  // roster size, not a "fill-rate" (no capacity field exists to divide
+  // by). Scoped to upcoming/active classes only — a completed or
+  // cancelled class's final roster isn't an operational signal anymore.
+  const upcomingClasses = classes
+    .filter((c) => c.status === "scheduled" || c.status === "in_progress")
+    .slice(0, MAX_UPCOMING_CLASSES);
+  const classEnrollment = await Promise.all(
+    upcomingClasses.map(async (c) => {
+      const enrollments = await listEnrollments(orgId, c.id);
+      return {
+        title: c.title,
+        serviceName: serviceNameFor.get(c.serviceId) ?? "Unknown service",
+        scheduledDate: c.scheduledDate,
+        enrolledCount: enrollments.filter((e) => e.status === "enrolled").length,
+      };
+    })
+  );
+
+  // Backlog age — documents still in draft/pending_approval, and
+  // service requests still open/in_progress, both oldest-first by
+  // createdAt (there's no separate "entered this status" timestamp for
+  // either, same limitation daysInStage above works around for Leads
+  // via updatedAt — these two don't have that same PATCH-bumps-it
+  // guarantee tied to status specifically, so createdAt is the honest
+  // choice here rather than reusing updatedAt and overstating precision).
+  const documentsOldest = documents
+    .filter((d) => d.status === "draft" || d.status === "pending_approval")
+    .map((d) => ({
+      docType: d.docType,
+      serviceName: serviceNameFor.get(d.serviceId) ?? "Unknown service",
+      status: d.status,
+      daysOpen: daysSince(d.createdAt),
+    }))
+    .sort((a, b) => b.daysOpen - a.daysOpen)
+    .slice(0, MAX_AGING_ITEMS);
+
+  const serviceRequestsOldest = serviceRequests
+    .filter((r) => r.status === "open" || r.status === "in_progress")
+    .map((r) => ({
+      title: r.title,
+      serviceName: serviceNameFor.get(r.serviceId) ?? "Unknown service",
+      priority: r.priority,
+      daysOpen: daysSince(r.createdAt),
+    }))
+    .sort((a, b) => b.daysOpen - a.daysOpen)
+    .slice(0, MAX_AGING_ITEMS);
+
   return {
     orgName,
     generatedAt: new Date().toISOString(),
@@ -122,5 +278,11 @@ export async function buildAiOrgSnapshot(orgId: string): Promise<AiOrgSnapshot> 
     openBlockers,
     overdueTasks,
     pipelineByStage,
+    budgetCompensation,
+    taskVelocity,
+    pipelineAging,
+    prospectAging,
+    classEnrollment,
+    backlogAge: { documentsOldest, serviceRequestsOldest },
   };
 }

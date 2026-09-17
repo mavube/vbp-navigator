@@ -3,7 +3,14 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import type { ServiceOption, Task } from "@/components/tasks/types";
+import type { ServiceOption, Task, TaskPriority } from "@/components/tasks/types";
+
+const PRIORITIES: { value: TaskPriority; label: string }[] = [
+  { value: "low", label: "Low priority" },
+  { value: "normal", label: "Normal priority" },
+  { value: "high", label: "High priority" },
+  { value: "urgent", label: "Urgent" },
+];
 
 export function NewTaskForm({
   services,
@@ -21,6 +28,7 @@ export function NewTaskForm({
   const [serviceId, setServiceId] = useState("");
   const [title, setTitle] = useState("");
   const [assigneeName, setAssigneeName] = useState("");
+  const [priority, setPriority] = useState<TaskPriority>("normal");
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [dependencies, setDependencies] = useState<string[]>([]);
@@ -45,7 +53,7 @@ export function NewTaskForm({
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceId, title, assigneeName, startDate, dueDate, dependencies }),
+        body: JSON.stringify({ serviceId, title, assigneeName, priority, startDate, dueDate, dependencies }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -55,6 +63,7 @@ export function NewTaskForm({
       onCreated(task);
       setTitle("");
       setAssigneeName("");
+      setPriority("normal");
       setStartDate("");
       setDueDate("");
       setDependencies([]);
@@ -97,6 +106,19 @@ export function NewTaskForm({
         onChange={(e) => setAssigneeName(e.target.value)}
         style={{ flex: "1 1 160px" }}
       />
+      <select
+        value={priority}
+        onChange={(e) => setPriority(e.target.value as TaskPriority)}
+        className="v2-input"
+        style={{ maxWidth: 160 }}
+        aria-label="Priority"
+      >
+        {PRIORITIES.map((p) => (
+          <option key={p.value} value={p.value}>
+            {p.label}
+          </option>
+        ))}
+      </select>
       <label style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: "0.75rem", color: "var(--v2-text-muted)" }}>
         Start (optional)
         <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ width: 150 }} />

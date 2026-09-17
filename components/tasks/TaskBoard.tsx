@@ -10,7 +10,7 @@ import { TaskKanban } from "@/components/tasks/TaskKanban";
 import { TaskGantt } from "@/components/tasks/TaskGantt";
 import { TaskCalendar } from "@/components/tasks/TaskCalendar";
 import { BlockersPanel } from "@/components/tasks/BlockersPanel";
-import type { Blocker, ServiceOption, Task, TaskStatus } from "@/components/tasks/types";
+import type { Blocker, ClassEvent, ServiceOption, Task, TaskPriority, TaskStatus } from "@/components/tasks/types";
 
 type ViewMode = "list" | "kanban" | "gantt" | "calendar";
 const VIEWS: { key: ViewMode; label: string }[] = [
@@ -35,6 +35,7 @@ export function TaskBoard() {
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [blockers, setBlockers] = useState<Blocker[]>([]);
+  const [classes, setClasses] = useState<ClassEvent[]>([]);
   const [view, setView] = useState<ViewMode>("list");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -46,15 +47,17 @@ export function TaskBoard() {
 
   async function loadAll() {
     try {
-      const [servicesRes, tasksRes, blockersRes] = await Promise.all([
+      const [servicesRes, tasksRes, blockersRes, classesRes] = await Promise.all([
         fetch("/api/services", { cache: "no-store" }),
         fetch("/api/tasks", { cache: "no-store" }),
         fetch("/api/blockers", { cache: "no-store" }),
+        fetch("/api/classes", { cache: "no-store" }),
       ]);
-      if (!servicesRes.ok || !tasksRes.ok || !blockersRes.ok) throw new Error("failed to load");
+      if (!servicesRes.ok || !tasksRes.ok || !blockersRes.ok || !classesRes.ok) throw new Error("failed to load");
       setServices(await servicesRes.json());
       setTasks(await tasksRes.json());
       setBlockers(await blockersRes.json());
+      setClasses(await classesRes.json());
       setError("");
     } catch {
       setError("Couldn't load tasks — try refreshing.");
@@ -71,6 +74,14 @@ export function TaskBoard() {
     return services.find((s) => s.id === serviceId)?.name ?? "Unknown service";
   }
 
+  // v3.0 roadmap Phase 9 (Cluster B) shipped dependency enforcement on
+  // this same PATCH and explicitly carried forward, as a known gap, that
+  // Kanban's drag/button status change swallowed the rejection silently
+  // (no inline error the way the List view's TaskItem already has) —
+  // "worth closing alongside Cluster D" per that phase's build guide
+  // entry. Now that Phase 11 (Cluster D) is touching Kanban anyway, this
+  // throws the server's real message instead of failing silently, so
+  // TaskKanban can show it the same way TaskItem/TaskCalendar do.
   async function patchStatus(taskId: string, status: TaskStatus) {
     const res = await fetch(`/api/tasks/${taskId}`, {
       method: "PATCH",
@@ -79,7 +90,55 @@ export function TaskBoard() {
     });
     if (res.ok) {
       setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status } : t)));
+    } else {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || "Couldn't update status");
     }
+  }
+
+  // Gantt drag-to-reschedule (Phase 11, Cluster D).
+  async function patchDates(taskId: string, dates: { startDate: string | null; dueDate: string | null }) {
+    const res = await fetch(`/api/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dates),
+    });
+    if (res.ok) {
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...dates } : t)));
+    } else {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || "Couldn't reschedule task");
+    }
+  }
+
+  async function patchPriority(taskId: string, priority: TaskPriority) {
+    const res = await fetch(`/api/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ priority }),
+    });
+    if (res.ok) {
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, priority } : t)));
+    } else {
+      throw new Error("Couldn't update priority");
+    }
+  }
+
+  // Calendar click-to-create-on-this-day (Phase 11, Cluster D) — same
+  // POST /api/tasks NewTaskForm already uses, just with a due date
+  // pre-filled from the day that was clicked instead of typed in.
+  async function quickCreateTask(input: { serviceId: string; title: string; dueDate: string }) {
+    const res = await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || "Couldn't create task");
+    }
+    const task: Task = await res.json();
+    setTasks((prev) => [task, ...prev]);
   }
 
   if (loading) return <p style={{ color: "var(--v2-text-muted)" }}>Loading…</p>;
@@ -181,15 +240,26 @@ export function TaskBoard() {
                 allTasks={tasks}
                 onStatusChange={(status) => setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status } : t)))}
                 onDatesChange={(dates) => setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...dates } : t)))}
+                onPriorityChange={(priority) => setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, priority } : t)))}
               />
             ))}
           </div>
         ) : view === "kanban" ? (
           <TaskKanban tasks={filteredTasks} serviceName={serviceName} blockedTaskIds={blockedTaskIds} onStatusChange={patchStatus} />
         ) : view === "gantt" ? (
-          <TaskGantt tasks={filteredTasks} serviceName={serviceName} blockedTaskIds={blockedTaskIds} />
+          <TaskGantt tasks={filteredTasks} serviceName={serviceName} blockedTaskIds={blockedTaskIds} onDatesChange={patchDates} />
         ) : (
-          <TaskCalendar tasks={filteredTasks} serviceName={serviceName} blockedTaskIds={blockedTaskIds} />
+          <TaskCalendar
+            tasks={filteredTasks}
+            services={services}
+            classes={filterServiceId ? classes.filter((c) => c.serviceId === filterServiceId) : classes}
+            blockers={filteredBlockers}
+            serviceName={serviceName}
+            blockedTaskIds={blockedTaskIds}
+            onCreateTask={quickCreateTask}
+            onStatusChange={patchStatus}
+            onPriorityChange={patchPriority}
+          />
         )}
       </Section>
 

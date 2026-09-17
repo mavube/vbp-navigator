@@ -5,7 +5,8 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
 import { CommentThread } from "@/components/collaboration/CommentThread";
-import type { Task, TaskStatus } from "@/components/tasks/types";
+import { PRIORITY_BADGE_TONE, PRIORITY_LABEL, PRIORITY_ORDER } from "@/components/tasks/priority";
+import type { Task, TaskPriority, TaskStatus } from "@/components/tasks/types";
 
 const STATUS_TONE: Record<TaskStatus, "neutral" | "accent" | "success"> = {
   open: "neutral",
@@ -29,6 +30,7 @@ export function TaskItem({
   allTasks = [],
   onStatusChange,
   onDatesChange,
+  onPriorityChange,
 }: {
   task: Task;
   serviceName: string;
@@ -41,6 +43,7 @@ export function TaskItem({
   allTasks?: Task[];
   onStatusChange: (status: TaskStatus) => void;
   onDatesChange?: (dates: { startDate: string | null; dueDate: string | null }) => void;
+  onPriorityChange?: (priority: TaskPriority) => void;
 }) {
   const [error, setError] = useState("");
   const [editingDates, setEditingDates] = useState(false);
@@ -48,7 +51,8 @@ export function TaskItem({
   const [dueDate, setDueDate] = useState(task.dueDate ?? "");
   const [savingDates, setSavingDates] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<TaskStatus | null>(null);
-  const busy = pendingStatus !== null || savingDates;
+  const [savingPriority, setSavingPriority] = useState(false);
+  const busy = pendingStatus !== null || savingDates || savingPriority;
 
   const dependencyTasks = task.dependencies
     .map((id) => allTasks.find((t) => t.id === id))
@@ -72,6 +76,24 @@ export function TaskItem({
       }
     } finally {
       setPendingStatus(null);
+    }
+  }
+
+  async function setPriority(priority: TaskPriority) {
+    if (priority === task.priority) return;
+    setSavingPriority(true);
+    setError("");
+    const res = await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ priority }),
+    });
+    setSavingPriority(false);
+    if (res.ok) {
+      onPriorityChange?.(priority);
+    } else {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error || "Couldn't update priority");
     }
   }
 
@@ -99,6 +121,7 @@ export function TaskItem({
         <div>
           <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             {task.title}
+            <Badge tone={PRIORITY_BADGE_TONE[task.priority]}>{PRIORITY_LABEL[task.priority]}</Badge>
             {openBlockerCount > 0 && <Badge tone="danger">Blocked ({openBlockerCount})</Badge>}
           </div>
           <div style={{ fontSize: "0.8rem", color: "var(--v2-text-faint)" }}>
@@ -140,6 +163,21 @@ export function TaskItem({
           >
             {editingDates ? "Cancel" : "Set dates"}
           </button>
+          <select
+            value={task.priority}
+            onChange={(e) => setPriority(e.target.value as TaskPriority)}
+            disabled={busy}
+            className="v2-input"
+            aria-label="Priority"
+            title="Priority"
+            style={{ padding: "3px 6px", fontSize: "0.75rem", width: "auto" }}
+          >
+            {PRIORITY_ORDER.map((p) => (
+              <option key={p} value={p}>
+                {PRIORITY_LABEL[p]}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

@@ -32,7 +32,7 @@ const SYSTEM_PROMPT = `You are the AI Operating Layer inside VBP Navigator OS, a
 
 This is the Observe/Understand/Advise stage of the AI layer (the first stage — a later stage may eventually draft documents or forecast demand, but that is not this request; do not attempt it here).
 
-Given a live JSON snapshot of the organization's services, work, blockers, pipeline, and finances, respond with a JSON object with exactly these three fields:
+Given a live JSON snapshot of the organization's services, work, blockers, pipeline, finances (including budget requests and compensation, not just expenses/revenue), task completion velocity, how long leads/prospects have been sitting without progress, upcoming classes' actual enrollment, and how old the oldest open documents/service requests are, respond with a JSON object with exactly these three fields:
 
 "observations": 2-4 plain-language sentences on what's actually happening right now — the shape of the situation, not a restatement of every number in the snapshot.
 

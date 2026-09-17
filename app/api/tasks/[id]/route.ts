@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getTask, getTasksByIds, updateTaskStatus, updateTaskDates, type TaskStatus } from "@/lib/db-tasks";
+import { getTask, getTasksByIds, updateTaskStatus, updateTaskDates, updateTaskPriority, type TaskStatus, type TaskPriority } from "@/lib/db-tasks";
 import { getUserContext, canManageService } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 const VALID_STATUSES: TaskStatus[] = ["open", "in_progress", "done"];
+const VALID_PRIORITIES: TaskPriority[] = ["low", "normal", "high", "urgent"];
 
 // PATCH /api/tasks/:id — update a task's status and/or its start/due
 // dates (the latter added in v3.0 Phase 6 for the Gantt/Calendar
@@ -26,11 +27,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const hasStatus = typeof body.status === "string";
   const hasStartDate = "startDate" in body;
   const hasDueDate = "dueDate" in body;
+  const hasPriority = typeof body.priority === "string";
 
   if (hasStatus && !VALID_STATUSES.includes(body.status as TaskStatus)) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
-  if (!hasStatus && !hasStartDate && !hasDueDate) {
+  if (hasPriority && !VALID_PRIORITIES.includes(body.priority as TaskPriority)) {
+    return NextResponse.json({ error: "Invalid priority" }, { status: 400 });
+  }
+  if (!hasStatus && !hasStartDate && !hasDueDate && !hasPriority) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
@@ -67,11 +72,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       dueDate: hasDueDate ? (typeof body.dueDate === "string" && body.dueDate ? body.dueDate : null) : undefined,
     });
   }
+  if (hasPriority) {
+    await updateTaskPriority(ctx.orgId, id, body.priority as TaskPriority);
+  }
 
   return NextResponse.json({
     id,
     ...(hasStatus ? { status: body.status } : {}),
     ...(hasStartDate ? { startDate: body.startDate || null } : {}),
     ...(hasDueDate ? { dueDate: body.dueDate || null } : {}),
+    ...(hasPriority ? { priority: body.priority } : {}),
   });
 }

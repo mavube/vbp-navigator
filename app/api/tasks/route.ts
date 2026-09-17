@@ -48,11 +48,15 @@ export async function POST(req: NextRequest) {
     ? body.dependencies.filter((d: unknown): d is string => typeof d === "string" && d.length > 0).slice(0, 20)
     : undefined;
 
+  const VALID_PRIORITIES = ["low", "normal", "high", "urgent"];
+  const priority = VALID_PRIORITIES.includes(body.priority) ? body.priority : undefined;
+
   const task = await createTask(orgId, {
     serviceId: body.serviceId,
     serviceRequestId: typeof body.serviceRequestId === "string" ? body.serviceRequestId : null,
     title: body.title.trim().slice(0, 200),
     description: typeof body.description === "string" ? body.description.slice(0, 4000) : undefined,
+    priority,
     assigneeId: typeof body.assigneeId === "string" ? body.assigneeId : null,
     assigneeName: typeof body.assigneeName === "string" ? body.assigneeName.trim().slice(0, 200) : undefined,
     startDate: typeof body.startDate === "string" && body.startDate ? body.startDate : null,

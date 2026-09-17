@@ -1,4 +1,5 @@
 export type TaskStatus = "open" | "in_progress" | "done";
+export type TaskPriority = "low" | "normal" | "high" | "urgent";
 
 export interface ServiceOption {
   id: string;
@@ -15,11 +16,24 @@ export interface Task {
   title: string;
   description: string;
   status: TaskStatus;
+  priority: TaskPriority;
   assigneeId: string | null;
   assigneeName: string;
   startDate: string | null;
   dueDate: string | null;
   dependencies: string[];
+}
+
+// v3.0 roadmap Phase 11 (Cluster D) — the Calendar view's class-session
+// integration. A minimal read-only projection of ClassRow (lib/db-
+// classes.ts), just what a calendar chip needs to render and link back
+// to Classes — not the full class record.
+export interface ClassEvent {
+  id: string;
+  serviceId: string;
+  title: string;
+  scheduledDate: string | null;
+  instructorName: string;
 }
 
 export type BlockerImpact = "low" | "medium" | "high" | "critical";

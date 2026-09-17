@@ -9,6 +9,12 @@ import { randomUUID } from "node:crypto";
 import { IS_POSTGRES, getPgPool, getSqliteDb } from "@/lib/db-driver";
 
 export type TaskStatus = "open" | "in_progress" | "done";
+// v3.0 roadmap Phase 11 (Cluster D) — "no priority field on Task at
+// all (so no color coding by urgency)." Four values, ordered low to
+// urgent; 'normal' is the default so every task created before this
+// field existed reads as unremarkable rather than silently becoming
+// "low" or "urgent."
+export type TaskPriority = "low" | "normal" | "high" | "urgent";
 
 export interface TaskRow {
   id: string;
@@ -23,6 +29,7 @@ export interface TaskRow {
   title: string;
   description: string;
   status: TaskStatus;
+  priority: TaskPriority;
   assigneeId: string | null;
   assigneeName: string;
   startDate: string | null;
@@ -38,6 +45,7 @@ export interface NewTask {
   serviceRequestId?: string | null;
   title: string;
   description?: string;
+  priority?: TaskPriority;
   assigneeId?: string | null;
   assigneeName?: string;
   startDate?: string | null;
@@ -87,6 +95,9 @@ function ensureSchema(): Promise<void> {
       if (!cols.some((c) => c.name === "service_request_id")) {
         db.exec(`ALTER TABLE tasks ADD COLUMN service_request_id TEXT`);
       }
+      if (!cols.some((c) => c.name === "priority")) {
+        db.exec(`ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'`);
+      }
     })();
   }
   return schemaReady;
@@ -101,6 +112,7 @@ function fromSqliteRow(row: Record<string, unknown>): TaskRow {
     title: row.title as string,
     description: row.description as string,
     status: row.status as TaskStatus,
+    priority: ((row.priority as string) || "normal") as TaskPriority,
     assigneeId: (row.assignee_id as string) ?? null,
     assigneeName: (row.assignee_name as string) ?? "",
     startDate: (row.start_date as string) ?? null,
@@ -123,7 +135,7 @@ export async function listTasks(
 ): Promise<TaskRow[]> {
   await ensureSchema();
   const cols = `id, service_id AS "serviceId", class_id AS "classId", service_request_id AS "serviceRequestId",
-                  title, description, status,
+                  title, description, status, priority,
                   assignee_id AS "assigneeId", assignee_name AS "assigneeName",
                   start_date AS "startDate", due_date AS "dueDate", dependencies,
                   created_at AS "createdAt", updated_at AS "updatedAt"`;
@@ -171,7 +183,7 @@ export async function getTasksByIds(orgId: string, ids: string[]): Promise<TaskR
   if (ids.length === 0) return [];
   await ensureSchema();
   const cols = `id, service_id AS "serviceId", class_id AS "classId", service_request_id AS "serviceRequestId",
-                  title, description, status,
+                  title, description, status, priority,
                   assignee_id AS "assigneeId", assignee_name AS "assigneeName",
                   start_date AS "startDate", due_date AS "dueDate", dependencies,
                   created_at AS "createdAt", updated_at AS "updatedAt"`;
@@ -200,20 +212,21 @@ export async function createTask(orgId: string, input: NewTask): Promise<TaskRow
   const dependencies = input.dependencies ?? [];
   const classId = input.classId ?? null;
   const serviceRequestId = input.serviceRequestId ?? null;
+  const priority = input.priority ?? "normal";
 
   if (IS_POSTGRES) {
     await (await getPgPool()).query(
-      `INSERT INTO tasks (id, org_id, service_id, class_id, service_request_id, title, description, status, assignee_id, assignee_name, start_date, due_date, dependencies, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'open',$8,$9,$10,$11,$12,$13,$13)`,
-      [id, orgId, input.serviceId, classId, serviceRequestId, input.title, description, assigneeId, assigneeName, startDate, dueDate, dependencies, now]
+      `INSERT INTO tasks (id, org_id, service_id, class_id, service_request_id, title, description, status, priority, assignee_id, assignee_name, start_date, due_date, dependencies, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'open',$8,$9,$10,$11,$12,$13,$14,$14)`,
+      [id, orgId, input.serviceId, classId, serviceRequestId, input.title, description, priority, assigneeId, assigneeName, startDate, dueDate, dependencies, now]
     );
   } else {
     (await getSqliteDb())
       .prepare(
-        `INSERT INTO tasks (id, org_id, service_id, class_id, service_request_id, title, description, status, assignee_id, assignee_name, start_date, due_date, dependencies, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,'open',?,?,?,?,?,?,?)`
+        `INSERT INTO tasks (id, org_id, service_id, class_id, service_request_id, title, description, status, priority, assignee_id, assignee_name, start_date, due_date, dependencies, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,'open',?,?,?,?,?,?,?,?)`
       )
-      .run(id, orgId, input.serviceId, classId, serviceRequestId, input.title, description, assigneeId, assigneeName, startDate, dueDate, JSON.stringify(dependencies), now, now);
+      .run(id, orgId, input.serviceId, classId, serviceRequestId, input.title, description, priority, assigneeId, assigneeName, startDate, dueDate, JSON.stringify(dependencies), now, now);
   }
 
   return {
@@ -224,6 +237,7 @@ export async function createTask(orgId: string, input: NewTask): Promise<TaskRow
     title: input.title,
     description,
     status: "open",
+    priority,
     assigneeId,
     assigneeName,
     startDate,
@@ -256,7 +270,7 @@ export async function getTaskServiceId(orgId: string, id: string): Promise<strin
 export async function getTask(orgId: string, id: string): Promise<TaskRow | null> {
   await ensureSchema();
   const cols = `id, service_id AS "serviceId", class_id AS "classId", service_request_id AS "serviceRequestId",
-                  title, description, status,
+                  title, description, status, priority,
                   assignee_id AS "assigneeId", assignee_name AS "assigneeName",
                   start_date AS "startDate", due_date AS "dueDate", dependencies,
                   created_at AS "createdAt", updated_at AS "updatedAt"`;
@@ -282,6 +296,27 @@ export async function updateTaskStatus(orgId: string, id: string, status: TaskSt
     (await getSqliteDb())
       .prepare(`UPDATE tasks SET status = ?, updated_at = ? WHERE org_id = ? AND id = ?`)
       .run(status, now, orgId, id);
+  }
+}
+
+// v3.0 roadmap Phase 11 (Cluster D) — the Kanban board's priority
+// color-coding needs a way to change a task's priority after creation,
+// not just at creation time (a task made before this phase, or made
+// without thinking about it yet, still needs an editing path). Same
+// gate as updateTaskStatus (that service's owner/contributor or an org
+// admin), enforced in the route handler, not here.
+export async function updateTaskPriority(orgId: string, id: string, priority: TaskPriority): Promise<void> {
+  await ensureSchema();
+  const now = new Date().toISOString();
+  if (IS_POSTGRES) {
+    await (await getPgPool()).query(
+      `UPDATE tasks SET priority = $1, updated_at = $2 WHERE org_id = $3 AND id = $4`,
+      [priority, now, orgId, id]
+    );
+  } else {
+    (await getSqliteDb())
+      .prepare(`UPDATE tasks SET priority = ?, updated_at = ? WHERE org_id = ? AND id = ?`)
+      .run(priority, now, orgId, id);
   }
 }
 
