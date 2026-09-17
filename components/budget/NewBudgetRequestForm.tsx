@@ -16,6 +16,7 @@ export function NewBudgetRequestForm({
   const [source, setSource] = useState<BudgetSource>("direct");
   const [purpose, setPurpose] = useState("");
   const [amount, setAmount] = useState("");
+  const [neededBy, setNeededBy] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -27,7 +28,7 @@ export function NewBudgetRequestForm({
       const res = await fetch("/api/budget-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceId, source, purpose, amount: Number(amount) }),
+        body: JSON.stringify({ serviceId, source, purpose, amount: Number(amount), neededBy: neededBy || undefined }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -37,6 +38,7 @@ export function NewBudgetRequestForm({
       onCreated(req);
       setPurpose("");
       setAmount("");
+      setNeededBy("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't submit request");
     } finally {
@@ -72,6 +74,13 @@ export function NewBudgetRequestForm({
         onChange={(e) => setAmount(e.target.value)}
         required
         style={{ maxWidth: 140 }}
+      />
+      <Input
+        type="date"
+        value={neededBy}
+        onChange={(e) => setNeededBy(e.target.value)}
+        title="Needed by (optional)"
+        style={{ maxWidth: 160 }}
       />
       <Button type="submit" disabled={busy || !serviceId || !purpose.trim() || !amount}>
         {busy ? "Submitting…" : "Submit request"}

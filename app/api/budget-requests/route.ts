@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
     source: body.source as BudgetSource,
     purpose: body.purpose.trim().slice(0, 2000),
     amount,
+    neededBy: typeof body.neededBy === "string" && body.neededBy ? body.neededBy : null,
   });
   return NextResponse.json(request, { status: 201 });
 }

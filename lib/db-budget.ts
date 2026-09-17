@@ -17,6 +17,7 @@ export interface BudgetRequestRow {
   amount: number;
   status: BudgetStatus;
   approverId: string | null;
+  neededBy: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -27,6 +28,7 @@ export interface NewBudgetRequest {
   source: BudgetSource;
   purpose: string;
   amount: number;
+  neededBy?: string | null;
 }
 
 export interface QuotationRow {
@@ -54,9 +56,19 @@ function ensureSchema(): Promise<void> {
         amount REAL NOT NULL,
         status TEXT NOT NULL DEFAULT 'pending',
         approver_id TEXT,
+        needed_by TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )`);
+      // needed_by (Phase 8.5) was added after this table first shipped —
+      // existing local dev.db files predate it, so add it defensively
+      // rather than requiring a fresh dev.db (mirrors the Postgres
+      // migration's `add column if not exists`, and the identical
+      // pattern in lib/db-tasks.ts for tasks.start_date).
+      const budgetCols = db.prepare(`PRAGMA table_info(budget_requests)`).all() as Array<{ name: string }>;
+      if (!budgetCols.some((c) => c.name === "needed_by")) {
+        db.exec(`ALTER TABLE budget_requests ADD COLUMN needed_by TEXT`);
+      }
       db.exec(`CREATE TABLE IF NOT EXISTS quotations (
         id TEXT PRIMARY KEY,
         org_id TEXT NOT NULL,
@@ -80,6 +92,7 @@ function fromSqliteRow(row: Record<string, unknown>): BudgetRequestRow {
     amount: row.amount as number,
     status: row.status as BudgetStatus,
     approverId: (row.approver_id as string) ?? null,
+    neededBy: (row.needed_by as string) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
@@ -88,7 +101,7 @@ function fromSqliteRow(row: Record<string, unknown>): BudgetRequestRow {
 export async function listBudgetRequests(orgId: string, serviceId?: string): Promise<BudgetRequestRow[]> {
   await ensureSchema();
   const cols = `id, service_id AS "serviceId", initiator_id AS "initiatorId", source, purpose, amount,
-                  status, approver_id AS "approverId", created_at AS "createdAt", updated_at AS "updatedAt"`;
+                  status, approver_id AS "approverId", needed_by AS "neededBy", created_at AS "createdAt", updated_at AS "updatedAt"`;
   if (IS_POSTGRES) {
     const res = serviceId
       ? await (await getPgPool()).query(
@@ -129,20 +142,21 @@ export async function createBudgetRequest(orgId: string, input: NewBudgetRequest
   const now = new Date().toISOString();
   const initiatorId = input.initiatorId ?? null;
   const approverId = await getOrgBudgetApproverId(orgId);
+  const neededBy = input.neededBy ?? null;
 
   if (IS_POSTGRES) {
     await (await getPgPool()).query(
-      `INSERT INTO budget_requests (id, org_id, service_id, initiator_id, source, purpose, amount, status, approver_id, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$9,$9)`,
-      [id, orgId, input.serviceId, initiatorId, input.source, input.purpose, input.amount, approverId, now]
+      `INSERT INTO budget_requests (id, org_id, service_id, initiator_id, source, purpose, amount, status, approver_id, needed_by, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$9,$10,$10)`,
+      [id, orgId, input.serviceId, initiatorId, input.source, input.purpose, input.amount, approverId, neededBy, now]
     );
   } else {
     (await getSqliteDb())
       .prepare(
-        `INSERT INTO budget_requests (id, org_id, service_id, initiator_id, source, purpose, amount, status, approver_id, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,'pending',?,?,?)`
+        `INSERT INTO budget_requests (id, org_id, service_id, initiator_id, source, purpose, amount, status, approver_id, needed_by, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,'pending',?,?,?,?)`
       )
-      .run(id, orgId, input.serviceId, initiatorId, input.source, input.purpose, input.amount, approverId, now, now);
+      .run(id, orgId, input.serviceId, initiatorId, input.source, input.purpose, input.amount, approverId, neededBy, now, now);
   }
 
   return {
@@ -154,6 +168,7 @@ export async function createBudgetRequest(orgId: string, input: NewBudgetRequest
     amount: input.amount,
     status: "pending",
     approverId,
+    neededBy,
     createdAt: now,
     updatedAt: now,
   };

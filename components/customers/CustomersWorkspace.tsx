@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import type { Customer, Engagement, ServiceOption } from "@/components/customers/types";
@@ -24,6 +25,13 @@ export function CustomersWorkspace() {
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Quick win: lead admission (LeadItem.tsx) deep-links here with
+  // ?highlight=<customerId> instead of a plain "see Customers" link —
+  // there's no per-customer detail page/route to deep-link to yet (a
+  // real gap, tracked in the enhancement backlog's Cluster C), so this
+  // scrolls to and highlights the right card on this list instead of
+  // pretending a full detail route exists.
+  const highlightId = useSearchParams().get("highlight");
 
   useEffect(() => {
     Promise.all([
@@ -38,6 +46,12 @@ export function CustomersWorkspace() {
       .catch(() => setError("Couldn't load customers — try refreshing."))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!highlightId || customers.length === 0) return;
+    const el = document.getElementById(`customer-${highlightId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightId, customers]);
 
   function serviceName(serviceId: string): string {
     return services.find((s) => s.id === serviceId)?.name ?? "Unknown service";
@@ -59,8 +73,17 @@ export function CustomersWorkspace() {
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-3)" }}>
       {customers.map((c) => {
         const theirEngagements = engagements.filter((e) => e.customerId === c.id);
+        const highlighted = highlightId === c.id;
         return (
-          <Card key={c.id} style={{ padding: "var(--v2-space-4)" }}>
+          <Card
+            key={c.id}
+            id={`customer-${c.id}`}
+            style={{
+              padding: "var(--v2-space-4)",
+              border: highlighted ? "2px solid var(--v2-accent)" : undefined,
+              background: highlighted ? "var(--v2-accent-soft)" : undefined,
+            }}
+          >
             <div style={{ fontWeight: 600 }}>{c.fullName}</div>
             <div style={{ fontSize: "0.8rem", color: "var(--v2-text-faint)" }}>
               {[c.email, c.phone, c.organizationName].filter(Boolean).join(" · ") || "No contact details on file"}

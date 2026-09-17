@@ -17,6 +17,7 @@ export interface BudgetRequest {
   purpose: string;
   amount: number;
   status: BudgetStatus;
+  neededBy: string | null;
 }
 
 export interface Quotation {
@@ -33,6 +34,7 @@ export interface Expense {
   amount: number;
   expenseDate: string;
   description: string;
+  receiptUrl: string;
 }
 
 export interface Invoice {

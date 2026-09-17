@@ -87,6 +87,7 @@ export function BudgetRequestItem({
           <div style={{ fontWeight: 600 }}>{request.purpose}</div>
           <div style={{ fontSize: "0.8rem", color: "var(--v2-text-faint)" }}>
             {serviceName} · {request.source === "petty_cash" ? "Petty cash" : "Direct"} · {request.amount.toLocaleString()}
+            {request.neededBy ? ` · needed by ${request.neededBy}` : ""}
           </div>
         </div>
         <div style={{ display: "flex", gap: "var(--v2-space-2)", alignItems: "center" }}>

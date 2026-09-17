@@ -57,7 +57,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not allowed to generate documents for this service" }, { status: 403 });
   }
 
-  const rendered = renderDocument(docType, { ...anchor.context, details });
+  // Quick win: recipientName/recipientEmail are otherwise always
+  // derived from the linked lead/engagement — fine for the normal
+  // case, but there was no way to override them for a one-off (e.g.
+  // the document actually needs to go to someone else at the same
+  // organization). An override is used only when non-empty; an empty
+  // or missing override falls back to the anchor-derived default, same
+  // as before this change.
+  const recipientNameOverride = typeof body.recipientName === "string" ? body.recipientName.trim() : "";
+  const recipientEmailOverride = typeof body.recipientEmail === "string" ? body.recipientEmail.trim() : "";
+
+  const rendered = renderDocument(docType, {
+    ...anchor.context,
+    details,
+    ...(recipientNameOverride ? { recipientName: recipientNameOverride } : {}),
+  });
   const createdByName = await resolveDisplayName(ctx, typeof body.createdByName === "string" ? body.createdByName : undefined);
 
   const doc = await createDocument(ctx.orgId, {
@@ -69,8 +83,8 @@ export async function POST(req: NextRequest) {
     title: rendered.title,
     body: rendered.body,
     details,
-    recipientName: anchor.context.recipientName,
-    recipientEmail: anchor.recipientEmail,
+    recipientName: recipientNameOverride || anchor.context.recipientName,
+    recipientEmail: recipientEmailOverride || anchor.recipientEmail,
     createdByName,
   });
   return NextResponse.json(doc, { status: 201 });

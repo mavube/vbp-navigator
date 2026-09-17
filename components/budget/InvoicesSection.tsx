@@ -23,6 +23,7 @@ export function InvoicesSection({ services }: { services: ServiceOption[] }) {
   const [direction, setDirection] = useState<InvoiceDirection>("outgoing");
   const [party, setParty] = useState("");
   const [amount, setAmount] = useState("");
+  const [dueDate, setDueDate] = useState("");
   const [busy, setBusy] = useState(false);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
 
@@ -46,7 +47,7 @@ export function InvoicesSection({ services }: { services: ServiceOption[] }) {
       const res = await fetch("/api/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceId, direction, party, amount: Number(amount) }),
+        body: JSON.stringify({ serviceId, direction, party, amount: Number(amount), dueDate: dueDate || undefined }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -56,6 +57,7 @@ export function InvoicesSection({ services }: { services: ServiceOption[] }) {
       setInvoices((prev) => [invoice, ...prev]);
       setParty("");
       setAmount("");
+      setDueDate("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't create invoice");
     } finally {
@@ -101,6 +103,13 @@ export function InvoicesSection({ services }: { services: ServiceOption[] }) {
             style={{ flex: "1 1 180px" }}
           />
           <Input type="number" min="0" step="0.01" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} required style={{ maxWidth: 140 }} />
+          <Input
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            title="Due date (optional — required for the 'overdue' status to ever apply)"
+            style={{ maxWidth: 160 }}
+          />
           <Button type="submit" loading={busy} disabled={!serviceId || !party.trim() || !amount}>
             {busy ? "Creating…" : "Create invoice"}
           </Button>
@@ -121,7 +130,10 @@ export function InvoicesSection({ services }: { services: ServiceOption[] }) {
                   <div style={{ fontWeight: 600 }}>
                     {inv.party} <span style={{ fontWeight: 400, color: "var(--v2-text-faint)" }}>· {inv.direction}</span>
                   </div>
-                  <div style={{ fontSize: "0.8rem", color: "var(--v2-text-faint)" }}>{serviceName(inv.serviceId)}</div>
+                  <div style={{ fontSize: "0.8rem", color: "var(--v2-text-faint)" }}>
+                    {serviceName(inv.serviceId)}
+                    {inv.dueDate ? ` · due ${inv.dueDate}` : ""}
+                  </div>
                 </div>
                 <div style={{ display: "flex", gap: "var(--v2-space-2)", alignItems: "center" }}>
                   <span style={{ fontWeight: 600 }}>{inv.amount.toLocaleString()}</span>

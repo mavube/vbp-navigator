@@ -15,6 +15,8 @@ export function NewLeadForm({
   const [serviceId, setServiceId] = useState("");
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -26,7 +28,7 @@ export function NewLeadForm({
       const res = await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceId, contactName, contactEmail }),
+        body: JSON.stringify({ serviceId, contactName, contactEmail, contactPhone, notes }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -36,6 +38,8 @@ export function NewLeadForm({
       onCreated(lead);
       setContactName("");
       setContactEmail("");
+      setContactPhone("");
+      setNotes("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't add lead");
     } finally {
@@ -74,6 +78,21 @@ export function NewLeadForm({
         value={contactEmail}
         onChange={(e) => setContactEmail(e.target.value)}
         style={{ flex: "1 1 200px" }}
+      />
+      <Input
+        type="tel"
+        placeholder="Phone (optional)"
+        value={contactPhone}
+        onChange={(e) => setContactPhone(e.target.value)}
+        style={{ flex: "1 1 160px" }}
+      />
+      <textarea
+        className="v2-input"
+        rows={2}
+        placeholder="Notes (optional) — context worth keeping with this lead"
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        style={{ flex: "1 1 100%", resize: "vertical" }}
       />
       <Button type="submit" disabled={busy || !serviceId || !contactName.trim()}>
         {busy ? "Adding…" : "Add lead"}

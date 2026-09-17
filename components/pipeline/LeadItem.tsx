@@ -35,6 +35,7 @@ export function LeadItem({
 }) {
   const [error, setError] = useState("");
   const [pendingStage, setPendingStage] = useState<LeadStage | null>(null);
+  const [admittedCustomerId, setAdmittedCustomerId] = useState<string | null>(null);
 
   async function setStage(stage: LeadStage) {
     setError("");
@@ -46,6 +47,8 @@ export function LeadItem({
         body: JSON.stringify({ stage }),
       });
       if (res.ok) {
+        const body: { customerId?: string | null } = await res.json().catch(() => ({}));
+        if (body.customerId) setAdmittedCustomerId(body.customerId);
         onStageChange(stage);
       } else {
         const body = await res.json().catch(() => ({}));
@@ -66,7 +69,13 @@ export function LeadItem({
           <div style={{ fontSize: "0.8rem", color: "var(--v2-text-faint)" }}>
             {serviceName}
             {lead.contactEmail ? ` · ${lead.contactEmail}` : ""}
+            {lead.contactPhone ? ` · ${lead.contactPhone}` : ""}
           </div>
+          {lead.notes && (
+            <div style={{ fontSize: "0.8rem", color: "var(--v2-text-muted)", marginTop: 4, whiteSpace: "pre-wrap" }}>
+              {lead.notes}
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", gap: "var(--v2-space-2)", alignItems: "center" }}>
           <Badge tone={STAGE_TONE[lead.stage]}>{STAGE_LABEL[lead.stage]}</Badge>
@@ -99,13 +108,23 @@ export function LeadItem({
       {error && <p style={{ color: "var(--v2-danger)", fontSize: "0.8rem", margin: "8px 0 0" }}>{error}</p>}
 
       {/* v3.0 Phase 4: admitting a lead also creates a Customer +
-          Engagement (app/api/leads/[id]/route.ts) — a plain link to
-          /customers rather than a deep link to the specific record,
-          since that would need extra state plumbing this stays
-          honest without. */}
+          Engagement (app/api/leads/[id]/route.ts), which returns the
+          new customerId. Deep-links to /customers?highlight=<id>
+          (CustomersWorkspace scrolls to and highlights that card) when
+          this component was the one that just performed the admission
+          — admittedCustomerId only lives in this component's local
+          state, so a lead that was already admitted before this page
+          load falls back to the plain list link rather than a stale
+          or guessed id. */}
       {lead.stage === "admitted" && (
         <p style={{ fontSize: "0.75rem", color: "var(--v2-text-faint)", margin: "8px 0 0" }}>
-          → Customer record created — see <Link href="/customers" style={{ color: "var(--v2-accent)" }}>Customers</Link>
+          → Customer record created — see{" "}
+          <Link
+            href={admittedCustomerId ? `/customers?highlight=${admittedCustomerId}` : "/customers"}
+            style={{ color: "var(--v2-accent)" }}
+          >
+            Customers
+          </Link>
         </p>
       )}
 

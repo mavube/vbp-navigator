@@ -14,6 +14,8 @@ export function ExpensesSection({ services }: { services: ServiceOption[] }) {
   const [serviceId, setServiceId] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  const [expenseDate, setExpenseDate] = useState("");
+  const [receiptUrl, setReceiptUrl] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -36,7 +38,13 @@ export function ExpensesSection({ services }: { services: ServiceOption[] }) {
       const res = await fetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceId, amount: Number(amount), description }),
+        body: JSON.stringify({
+          serviceId,
+          amount: Number(amount),
+          description,
+          expenseDate: expenseDate || undefined,
+          receiptUrl: receiptUrl || undefined,
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -46,6 +54,8 @@ export function ExpensesSection({ services }: { services: ServiceOption[] }) {
       setExpenses((prev) => [expense, ...prev]);
       setAmount("");
       setDescription("");
+      setExpenseDate("");
+      setReceiptUrl("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't log expense");
     } finally {
@@ -65,6 +75,19 @@ export function ExpensesSection({ services }: { services: ServiceOption[] }) {
           </select>
           <Input placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} style={{ flex: "1 1 220px" }} />
           <Input type="number" min="0" step="0.01" placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} required style={{ maxWidth: 140 }} />
+          <Input
+            type="date"
+            value={expenseDate}
+            onChange={(e) => setExpenseDate(e.target.value)}
+            title="Expense date (defaults to today if left blank)"
+            style={{ maxWidth: 160 }}
+          />
+          <Input
+            placeholder="Receipt link (optional)"
+            value={receiptUrl}
+            onChange={(e) => setReceiptUrl(e.target.value)}
+            style={{ flex: "1 1 200px" }}
+          />
           <Button type="submit" disabled={busy || !serviceId || !amount}>
             {busy ? "Logging…" : "Log expense"}
           </Button>
@@ -85,6 +108,14 @@ export function ExpensesSection({ services }: { services: ServiceOption[] }) {
                   <div style={{ fontWeight: 600 }}>{exp.description || "Expense"}</div>
                   <div style={{ fontSize: "0.8rem", color: "var(--v2-text-faint)" }}>
                     {serviceName(exp.serviceId)} · {exp.expenseDate}
+                    {exp.receiptUrl && (
+                      <>
+                        {" · "}
+                        <a href={exp.receiptUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--v2-accent)" }}>
+                          Receipt
+                        </a>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div style={{ fontWeight: 600 }}>{exp.amount.toLocaleString()}</div>

@@ -27,6 +27,18 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        {/* Applies a saved dark/light choice (see components/ui/ThemeToggle.tsx)
+            before first paint, so a returning visitor never sees a flash of
+            the wrong theme. Inline + synchronous + first in <body> on
+            purpose: this runs before the rest of the page is parsed. With no
+            saved choice, this is a no-op and the CSS's own
+            prefers-color-scheme handling (styles/design-tokens.css) governs,
+            same as before this phase. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem("vbp-theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t);}}catch(e){}})();`,
+          }}
+        />
         <AppShell>{children}</AppShell>
         <VersionBadge />
         <ServiceWorkerRegister />

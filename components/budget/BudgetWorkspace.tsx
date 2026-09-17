@@ -48,7 +48,7 @@ export function BudgetWorkspace() {
   if (error) return <p style={{ color: "var(--v2-danger)" }}>{error}</p>;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-5)" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-6)" }}>
       <div style={{ display: "flex", gap: "var(--v2-space-2)", borderBottom: "1px solid var(--v2-border)" }}>
         {TABS.map((t) => (
           <button

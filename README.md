@@ -1,69 +1,59 @@
-# Phase 8 — AI Operating Layer (Observe / Understand / Advise)
+# Phase 8.5 — Quick Wins (post-Phase-8 enhancement backlog, Cluster A)
 
-Eighth phase of the v3.0 roadmap (§19). This is the first half only, exactly as confirmed: **Observe/Understand/Advise**, not Forecast/Assist (drafting documents, demand forecasting) — that stays unbuilt until this half has been validated in real use.
+Follows the live-usage feedback after Phase 8 (AI Operating Layer): a real bug report (Gantt/Calendar "Invalid Date") plus a five-part enhancement request, which was audited and written up in the project's new `vbp-navigator-os-v3-enhancement-backlog.md` doc. You chose "Workflow wiring" as the next full phase and asked for this quick-wins bundle first, the same way Phase 0 (Housekeeping) worked before Phase 1.
 
-## Before you apply this: you already did the one manual step
+## Bug fix (may already be applied)
 
-You've already added `ANTHROPIC_API_KEY` as a Secret environment variable in Vercel. That's the only piece of setup outside this zip. If you haven't redeployed since adding it, this deploy will pick it up.
+If you already applied the standalone `db-driver.ts` sent earlier in this conversation (the fix for Gantt/Calendar showing "Invalid Date"), you're already up to date on this one — it's included again here only so this package is self-contained. If you haven't applied it yet, this is that same fix: Postgres `date` columns now return as plain "YYYY-MM-DD" strings instead of full ISO timestamps, matching what SQLite (dev) always returned.
 
 ## How to apply
 
-Two files are **replacements of files that also changed in earlier phases** — apply carefully:
-- `package.json` and `package-lock.json` now include the new `@anthropic-ai/sdk` dependency. If you've hand-edited either file since the last phase, merge rather than blindly overwrite; otherwise just replace them.
-
-Everything else is new or a clean drop-in replacement:
+Everything else here is either a new file or a clean drop-in replacement — no merging needed, this reflects the current state of each file:
 
 **New:**
-- `lib/ai-client.ts`
-- `lib/ai-context.ts`
-- `app/api/ai/observe/route.ts`
-- `app/advisor/page.tsx`
-- `components/advisor/AdvisorView.tsx`
+- `components/ui/ThemeToggle.tsx`
+- `supabase/migrations/0015_phase85_quick_wins.sql`
 
 **Replace:**
-- `components/ui/icons.tsx`
-- `components/ui/Sidebar.tsx`
-- `package.json`
-- `package-lock.json`
-- `.env.example` (documentation only)
-- `claude/vbp-navigator-os-v2-build-guide.md` (documentation only)
+- `lib/db-driver.ts` (see above)
+- `components/pipeline/NewLeadForm.tsx`, `components/pipeline/LeadItem.tsx`
+- `components/customers/CustomersWorkspace.tsx`, `app/customers/page.tsx`
+- `components/budget/ExpensesSection.tsx`, `components/budget/InvoicesSection.tsx`, `components/budget/NewBudgetRequestForm.tsx`, `components/budget/BudgetRequestItem.tsx`, `components/budget/BudgetWorkspace.tsx`, `components/budget/types.ts`
+- `lib/db-budget.ts`
+- `app/api/budget-requests/route.ts`, `app/api/documents/route.ts`
+- `components/documents/NewDocumentForm.tsx`
+- `components/ui/icons.tsx`, `components/ui/Sidebar.tsx`
+- `styles/components.css`
+- `app/layout.tsx`
 
-After applying, run `npm install` (picks up the new SDK dependency), then `npm run build` and redeploy as usual.
+**Database migration required:** `supabase/migrations/0015_phase85_quick_wins.sql` adds one nullable column (`budget_requests.needed_by`). Apply it in Supabase (SQL editor, or however you've been running the earlier migrations) before or right after deploying — the code tolerates the column being briefly absent (defaults to `null`), but the "needed by" field won't save until it's there.
 
-**No database migration.** This phase reads existing data only — it never writes anything back.
+After applying, `npm run build` and redeploy as usual. No new npm dependencies.
 
 ## What this adds
 
-A new **Advisor** page (sidebar, Overview group, new sparkle icon) with one button: **Generate insights**. Nothing loads automatically — each click is a real, billed call to the Claude API, so it only happens when someone in your org actually asks for it.
+Seven small, mostly-independent improvements, all scoped to "wire an existing backend capability into the UI" rather than new subsystems:
 
-When clicked, it sends a compact, org-scoped snapshot of your own data — every service's health status (from Phase 7), your overall KPI numbers, the highest-impact open blockers, overdue tasks, and pipeline counts by stage — to Claude, and asks for three things back:
+1. **Lead form** (Pipeline) — phone and notes fields, both already accepted by the backend, just never exposed. Now shown on each lead card too.
+2. **Expense form** (Budget) — a date field (previously silently defaulted to today, no way to backdate) and a receipt link field, now shown as a "Receipt" link on each logged expense.
+3. **Invoice form** (Budget) — a due-date field. This is what the existing "overdue" status logic depends on; it could never fire before because nothing ever set a due date.
+4. **Budget request "needed by" date** — the one item here with a small schema change (see migration above). The original brief described this as "surface the quotation-attach endpoint inline," but on closer inspection that already exists (every budget request card has always had an inline "add quote" form right below it) — the real, actually-missing gap was a deadline field, so that's what got built instead.
+5. **Document recipient override** — recipient name/email are otherwise always derived from the linked lead/engagement. A "Send to someone else…" toggle on the generate form now lets you override either field for the one-off case, without touching the normal auto-derived path.
+6. **Dark mode toggle** — the dark color tokens already existed in `styles/design-tokens.css` (both automatic OS-preference matching and a manual override), there was just no switch anywhere. Now there's a "Dark mode / Light mode" button at the bottom of the sidebar (and the mobile drawer), persisted per-browser, applied before first paint so there's no flash of the wrong theme on reload.
+7. **Lead admission deep link** — marking a lead "admitted" now links straight to the new customer record on the Customers page (scrolled to and highlighted) instead of a plain "see Customers" link. Honest scoping note: there's no per-customer detail page/route yet (a real gap, tracked in Cluster C of the backlog), so this highlights the right card on the list rather than pretending a full detail route exists — still a real improvement over the static link it replaces.
 
-- **Observations** — a few plain-language sentences on what's actually happening right now.
-- **Connections** — specific, factual links between real things in your data (a service with no provider that also has a high-impact blocker open, say) — never generic filler, and never a fact that isn't actually in your data.
-- **Recommendations** — up to 5 concrete next actions, each naming a real service, task, or blocker — never generic advice like "communicate better."
-
-If the AI service isn't configured (no API key yet, or it hasn't redeployed since you added one), the page shows a clear "Not configured" message instead of breaking. If Claude's response doesn't come back in the expected format, the page shows it as plain text rather than silently dropping it.
-
-## Data boundary
-
-The Advisor only ever sees the one organization's own data — the snapshot is built from the exact same `orgId`-scoped queries every other part of this app already uses, so there's no separate "AI access control" layer to get right or wrong. It's condensed on purpose too: top 8 blockers by impact, up to 8 overdue tasks, pipeline counts rather than every lead's contact details — smaller and more relevant to hand a model than a full raw dump would be.
+**Also fixed in passing:** two previously-flagged, still-broken instances of a bad CSS variable (`var(--v2-space-5)`, which doesn't exist in the token scale — it jumps space-4 → space-6) that were silently collapsing some flex gaps to zero: the sidebar's own nav spacing, and the Budget workspace's tab spacing. Both were noted as carried-forward gaps in earlier build-guide entries and are now closed.
 
 ## What was verified
 
-- `npm run build` and `npx tsc --noEmit` — both clean.
-- The most important local test: with **no** `ANTHROPIC_API_KEY` set in this session's sandbox (matching how the app ran before you added the Vercel one), `POST /api/ai/observe` returned a clean `503` with the "not configured" message — not a crash, not a hang. The Advisor page rendered correctly both before and after clicking "Generate insights" in that state.
-- Playwright screenshots on desktop (1440px) and mobile (390px) confirm the page renders correctly with no horizontal overflow.
+- `npx tsc --noEmit` and `npm run build` — both clean.
+- Full API round-trip smoke test against local SQLite for all four extended create forms (lead with phone/notes, expense with date/receipt, invoice with due date, budget request with needed-by) — all fields saved and returned correctly.
+- Lead admission flow smoke-tested end to end (new → contacted → assessed → admitted), confirming `customerId` comes back and the Customers page highlight/scroll works.
+- Document generation smoke-tested with a recipient override — confirmed the override reaches both the rendered document body and the stored record.
+- Playwright screenshots at desktop (1440px) and mobile (390px), light and dark, covering every touched screen — no horizontal overflow anywhere, dark mode renders correctly (including the Gantt view, whose date rendering this phase's bug fix also touches), and the theme choice survives a page reload.
 
-## An honest gap — the one thing I could not verify myself
+## Honest gaps
 
-**The actual live Claude API call has not been tested end-to-end**, because this sandbox has no API key, and it shouldn't be handed your production one to test with. Everything up to and including the API request itself — how the org snapshot is built, how the request is constructed, every error path — is verified. What isn't is what comes back from a real call: whether the JSON parses cleanly every time, whether the observations/connections/recommendations are actually useful, whether 1024 max tokens is enough or too many.
-
-**Please click "Generate insights" once this is live and tell me what you see** — especially if you ever get the "Unstructured response" fallback card, since that would mean the model isn't reliably following the requested format and the prompt may need tightening.
-
-## Known limitations / not done yet
-
-- Forecast/Assist (drafting documents, demand forecasting) — the second half of §19 — is not built. Revisit once this half has been used for real.
-- No rate limiting or cost cap on the Advisor button — low-risk for a 5-person internal tool, but nothing stops rapid repeated clicks from racking up calls.
-- No persistence of past insights — each generation is fresh and un-stored. That's deliberately left for Phase 9 (Organizational Memory), not built here.
-- Capacity context in the snapshot only reads Tasks' assignee field, same limitation Phase 7's capacity intelligence already carries.
-- No fiscal-year scoping on the snapshot — it's always a current, all-time-ish read.
+- The Gantt/Calendar Postgres date-parsing fix (`lib/db-driver.ts`) still hasn't been confirmed against your actual production Postgres from this sandbox — please double check the Gantt/Calendar views on the live deployment if you haven't already since applying it.
+- The "needed by" field is new to the schema — until the migration runs, existing budget requests will simply show no "needed by" date (same as any other request where it was left blank), not an error.
+- The customer deep-link only works within the same browser session that performed the admission (it's tracked in local component state, not persisted) — a lead that was already admitted before a page load falls back to the plain "see Customers" link, same as before this phase.

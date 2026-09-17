@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { DOCUMENT_TYPE_LABELS, PRE_ADMISSION_TYPES, type DocumentType } from "@/lib/document-templates";
 import type { DocumentRecord, LeadOption, EngagementOption, CustomerOption, ServiceOption } from "@/components/documents/types";
 
@@ -24,6 +25,9 @@ export function NewDocumentForm({
   const [leadId, setLeadId] = useState("");
   const [engagementId, setEngagementId] = useState("");
   const [details, setDetails] = useState("");
+  const [recipientName, setRecipientName] = useState("");
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [showRecipientOverride, setShowRecipientOverride] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -49,6 +53,8 @@ export function NewDocumentForm({
           leadId: isPreAdmission ? leadId : undefined,
           engagementId: isPreAdmission ? undefined : engagementId,
           details,
+          recipientName: recipientName || undefined,
+          recipientEmail: recipientEmail || undefined,
         }),
       });
       if (!res.ok) {
@@ -60,6 +66,9 @@ export function NewDocumentForm({
       setDetails("");
       setLeadId("");
       setEngagementId("");
+      setRecipientName("");
+      setRecipientEmail("");
+      setShowRecipientOverride(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't generate document");
     } finally {
@@ -119,6 +128,38 @@ export function NewDocumentForm({
         value={details}
         onChange={(e) => setDetails(e.target.value)}
       />
+
+      {/* Quick win: recipient name/email are otherwise always derived
+          from the linked lead/engagement — this override only matters
+          for the one-off case (the document actually needs to go to
+          someone else), so it's tucked behind a toggle rather than two
+          more always-visible fields on every generation. */}
+      {showRecipientOverride ? (
+        <div style={{ display: "flex", gap: "var(--v2-space-2)", flexWrap: "wrap" }}>
+          <Input
+            placeholder="Recipient name override (optional)"
+            value={recipientName}
+            onChange={(e) => setRecipientName(e.target.value)}
+            style={{ flex: "1 1 200px" }}
+          />
+          <Input
+            type="email"
+            placeholder="Recipient email override (optional)"
+            value={recipientEmail}
+            onChange={(e) => setRecipientEmail(e.target.value)}
+            style={{ flex: "1 1 200px" }}
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowRecipientOverride(true)}
+          className="v2-btn v2-btn-secondary"
+          style={{ padding: "4px 10px", fontSize: "0.75rem", alignSelf: "flex-start" }}
+        >
+          Send to someone else…
+        </button>
+      )}
 
       {isPreAdmission && leads.length === 0 && (
         <p className="v2-public-hint">No leads yet — add one on Pipeline first.</p>

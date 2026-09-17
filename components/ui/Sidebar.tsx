@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useNavProgress } from "@/components/ui/NavProgress";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import {
   IconAdvisor,
   IconArchitecture,
@@ -124,6 +125,9 @@ function NavContent({
           </div>
         ))}
       </nav>
+      <div style={{ marginTop: "auto", paddingTop: "var(--v2-space-4)" }}>
+        <ThemeToggle />
+      </div>
     </>
   );
 }
