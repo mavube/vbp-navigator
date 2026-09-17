@@ -25,11 +25,13 @@ import { listEnrollments } from "@/lib/db-enrollments";
 import { listDocuments } from "@/lib/db-documents";
 import { listServiceRequests } from "@/lib/db-service-requests";
 import { getOrgName } from "@/lib/organizations";
+import { listMemory, ensureTodaySnapshot, getPriorSnapshot } from "@/lib/db-org-memory";
 
 const MAX_BLOCKERS = 8;
 const MAX_OVERDUE_TASKS = 8;
 const MAX_AGING_ITEMS = 8;
 const MAX_UPCOMING_CLASSES = 8;
+const MAX_MEMORY_ITEMS = 8;
 const IMPACT_RANK: Record<BlockerImpact, number> = { critical: 3, high: 2, medium: 1, low: 0 };
 
 // v3.0 roadmap Cluster E (AI Advisor expansion) — the enhancement
@@ -37,11 +39,11 @@ const IMPACT_RANK: Record<BlockerImpact, number> = { critical: 3, high: 2, mediu
 // budget/compensation data entirely, task completion velocity,
 // lead/prospect stage-dwell (aging), class enrollment fill-rate, and
 // document/service-request backlog age. Trend vs. a prior snapshot
-// ("this got worse this week") is deliberately NOT built here — Diallo
-// chose to skip it (2026-09-17) since it depends on the roadmap's own
-// Phase 9 (Organizational Memory, §17), which doesn't exist yet; a
-// point-in-time-only read stays honest rather than faking a trend from
-// nothing to compare against.
+// ("this got worse this week") was deliberately NOT built in Cluster E
+// — Diallo chose to skip it then (2026-09-17) because it depended on
+// the roadmap's own Phase 9 (Organizational Memory, §17), which didn't
+// exist yet. Phase 13 (this file's `trend`/`recentMemory` additions,
+// below) is that Phase 9, so the gap is now closed.
 function daysSince(dateStr: string): number {
   return Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000));
 }
@@ -96,21 +98,58 @@ export interface AiOrgSnapshot {
     documentsOldest: Array<{ docType: string; serviceName: string; status: string; daysOpen: number }>;
     serviceRequestsOldest: Array<{ title: string; serviceName: string; priority: string; daysOpen: number }>;
   };
+  // Phase 13 (v3.0 roadmap Phase 9, §17 — Organizational Memory)
+  // additions below. `trend` is null until an org has a snapshot from
+  // an earlier UTC day to diff against (see lib/db-org-memory.ts's
+  // ensureTodaySnapshot/getPriorSnapshot) — never a fabricated zero.
+  // Positive deltas mean "more/higher than the prior snapshot," for
+  // every field including the ones where more is bad (e.g.
+  // tasksOverdue, servicesAtRisk) — the model's system prompt is what's
+  // told which direction is good per field, not this data shape.
+  trend: {
+    sinceDate: string;
+    daysAgo: number;
+    activeWork: number;
+    revenueOutgoingTotal: number;
+    revenueCollectedTotal: number;
+    costTotal: number;
+    netTotal: number;
+    servicesHealthy: number;
+    servicesAttention: number;
+    servicesAtRisk: number;
+    blockersHighImpactOpen: number;
+    tasksOverdue: number;
+  } | null;
+  // Newest-first decision/lesson entries anyone in the org has logged
+  // (`/memory`) — the "historical pattern-matching" the roadmap's own
+  // Phase 9 description says should feed the AI layer. Capped the same
+  // MAX_BLOCKERS-style way every other list in this snapshot is.
+  recentMemory: Array<{ type: "decision" | "lesson"; title: string; body: string; serviceName: string | null; daysAgo: number }>;
 }
 
 export async function buildAiOrgSnapshot(orgId: string): Promise<AiOrgSnapshot> {
-  const [orgName, services, rollups, kpi, blockers, leads, prospects, classes, documents, serviceRequests] = await Promise.all([
-    getOrgName(orgId),
-    listServices(orgId),
-    getServiceRollups(orgId),
-    getOrgKpiSummary(orgId),
-    listBlockers(orgId),
-    listLeads(orgId),
-    listProspects(orgId),
-    listClasses(orgId),
-    listDocuments(orgId),
-    listServiceRequests(orgId),
-  ]);
+  const [orgName, services, rollups, kpi, blockers, leads, prospects, classes, documents, serviceRequests, priorSnapshot, memory] =
+    await Promise.all([
+      getOrgName(orgId),
+      listServices(orgId),
+      getServiceRollups(orgId),
+      getOrgKpiSummary(orgId),
+      listBlockers(orgId),
+      listLeads(orgId),
+      listProspects(orgId),
+      listClasses(orgId),
+      listDocuments(orgId),
+      listServiceRequests(orgId),
+      getPriorSnapshot(orgId),
+      listMemory(orgId, MAX_MEMORY_ITEMS),
+    ]);
+
+  // Opportunistic capture (no cron in this app) — idempotent per org
+  // per UTC day, so every "Generate insights" click after the first
+  // one today is a harmless no-op. Read via `priorSnapshot` above,
+  // which deliberately excludes today so a snapshot never diffs
+  // against itself.
+  await ensureTodaySnapshot(orgId, kpi);
 
   const rollupFor = new Map(rollups.map((r) => [r.serviceId, r]));
   const serviceNameFor = new Map(services.map((s) => [s.id, s.name]));
@@ -270,6 +309,36 @@ export async function buildAiOrgSnapshot(orgId: string): Promise<AiOrgSnapshot> 
     .sort((a, b) => b.daysOpen - a.daysOpen)
     .slice(0, MAX_AGING_ITEMS);
 
+  // Trend — null when there's no earlier-day snapshot yet (see this
+  // file's AiOrgSnapshot comment on `trend`). Deltas are live-minus-
+  // prior, computed here rather than stored, so they always reflect
+  // the current live kpi even though the comparison point is a
+  // once-a-day capture.
+  const trend = priorSnapshot
+    ? {
+        sinceDate: priorSnapshot.snapshotDate,
+        daysAgo: daysSince(priorSnapshot.createdAt),
+        activeWork: kpi.activeWork - priorSnapshot.activeWork,
+        revenueOutgoingTotal: kpi.revenueOutgoingTotal - priorSnapshot.revenueOutgoingTotal,
+        revenueCollectedTotal: kpi.revenueCollectedTotal - priorSnapshot.revenueCollectedTotal,
+        costTotal: kpi.costTotal - priorSnapshot.costTotal,
+        netTotal: kpi.netTotal - priorSnapshot.netTotal,
+        servicesHealthy: kpi.servicesHealthy - priorSnapshot.servicesHealthy,
+        servicesAttention: kpi.servicesAttention - priorSnapshot.servicesAttention,
+        servicesAtRisk: kpi.servicesAtRisk - priorSnapshot.servicesAtRisk,
+        blockersHighImpactOpen: kpi.blockersHighImpactOpen - priorSnapshot.blockersHighImpactOpen,
+        tasksOverdue: kpi.tasksOverdue - priorSnapshot.tasksOverdue,
+      }
+    : null;
+
+  const recentMemory = memory.map((m) => ({
+    type: m.type,
+    title: m.title,
+    body: m.body,
+    serviceName: m.serviceId ? serviceNameFor.get(m.serviceId) ?? "Unknown service" : null,
+    daysAgo: daysSince(m.createdAt),
+  }));
+
   return {
     orgName,
     generatedAt: new Date().toISOString(),
@@ -284,5 +353,7 @@ export async function buildAiOrgSnapshot(orgId: string): Promise<AiOrgSnapshot> 
     prospectAging,
     classEnrollment,
     backlogAge: { documentsOldest, serviceRequestsOldest },
+    trend,
+    recentMemory,
   };
 }

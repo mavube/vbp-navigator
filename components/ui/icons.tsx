@@ -147,6 +147,18 @@ export function IconDocuments(props: IconProps) {
   );
 }
 
+// Phase 13 (v3.0 roadmap Phase 9, §17 — Organizational Memory) — an
+// open book, distinct from IconDocuments' single sheet-with-folded-
+// corner, since Memory is a running log to read back through, not a
+// generated artifact.
+export function IconMemory(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 6.5c-1.5-1.2-3.6-1.7-5.5-1.3-.6.1-1 .6-1 1.2v10.8c0 .7.7 1.2 1.4 1 1.7-.4 3.6.1 5.1 1.2M12 6.5c1.5-1.2 3.6-1.7 5.5-1.3.6.1 1 .6 1 1.2v10.8c0 .7-.7 1.2-1.4 1-1.7-.4-3.6.1-5.1 1.2M12 6.5v12.9" />
+    </svg>
+  );
+}
+
 export function IconMenu(props: IconProps) {
   return (
     <svg {...base} {...props}>

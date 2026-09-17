@@ -56,8 +56,9 @@ export function AdvisorView() {
             <div style={{ fontWeight: 600 }}>{insights ? "Regenerate" : "Generate insights"}</div>
             <div style={{ fontSize: "0.8rem", color: "var(--v2-text-muted)" }}>
               Reads a live snapshot of your org's services, work, blockers, pipeline, finances, budget/compensation
-              exposure, task velocity, pipeline and prospect aging, class enrollment, and document/request
-              backlog age — nothing else's.
+              exposure, task velocity, pipeline and prospect aging, class enrollment, document/request
+              backlog age, how those numbers have moved since the snapshot last captured, and decisions/lessons
+              logged in Memory — nothing else's.
               {insights && ` Last generated ${new Date(insights.generatedAt).toLocaleString()}.`}
             </div>
           </div>

@@ -17,6 +17,7 @@ export const NAV_LINKS: NavLinkMeta[] = [
   { href: "/dashboard", label: "Dashboard", group: "Overview" },
   { href: "/", label: "Architecture", group: "Overview" },
   { href: "/advisor", label: "Advisor", group: "Overview" },
+  { href: "/memory", label: "Memory", group: "Overview" },
   { href: "/tasks", label: "Tasks", group: "Delivery", badgeKey: "tasksOverdue" },
   { href: "/pipeline", label: "Pipeline", group: "Delivery" },
   { href: "/classes", label: "Classes", group: "Delivery" },
