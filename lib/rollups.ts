@@ -35,7 +35,7 @@ import { ensureCompensationSchema } from "@/lib/db-compensation";
 import { ensureBlockersSchema } from "@/lib/db-blockers";
 import { ensureInvoicesSchema } from "@/lib/db-invoices";
 import { adjacentFiscalYears, currentFiscalYear, fyLabel } from "@/lib/fiscal-year";
-import { computeServiceHealth, type HealthStatus } from "@/lib/service-health";
+import { computeServiceHealth, type HealthStatus, type ServiceHealthReason } from "@/lib/service-health";
 
 // On the local SQLite driver, each module creates its own table lazily —
 // only once one of that module's own functions is first called. Rollups
@@ -387,7 +387,7 @@ export interface AtRiskService {
   serviceId: string;
   serviceName: string;
   status: HealthStatus;
-  reasons: string[];
+  reasons: ServiceHealthReason[];
 }
 
 // v3.0 roadmap Phase 7 — the org-wide numbers behind the new /dashboard

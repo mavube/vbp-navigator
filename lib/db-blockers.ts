@@ -153,6 +153,41 @@ export async function getBlockerServiceId(orgId: string, id: string): Promise<st
   return row?.service_id ?? null;
 }
 
+// Full row by id — v3.0 Phase 9 (Cluster B) needs a resolving blocker's
+// own `taskId` to decide whether to auto-unblock that task.
+export async function getBlocker(orgId: string, id: string): Promise<BlockerRow | null> {
+  await ensureSchema();
+  const cols = `id, service_id AS "serviceId", task_id AS "taskId", title, description,
+                  owner_name AS "ownerName", impact, required_action AS "requiredAction", status,
+                  created_at AS "createdAt", resolved_at AS "resolvedAt"`;
+  if (IS_POSTGRES) {
+    const res = await (await getPgPool()).query(`SELECT ${cols} FROM blockers WHERE org_id = $1 AND id = $2`, [orgId, id]);
+    return res.rows[0] ?? null;
+  }
+  const row = (await getSqliteDb()).prepare(`SELECT * FROM blockers WHERE org_id = ? AND id = ?`).get(orgId, id) as
+    | Record<string, unknown>
+    | undefined;
+  return row ? fromSqliteRow(row) : null;
+}
+
+// Count of still-open blockers linked to one task — v3.0 Phase 9 needs
+// this right after resolving a blocker, to know whether the one just
+// resolved was the *last* thing holding that task back.
+export async function countOpenBlockersForTask(orgId: string, taskId: string): Promise<number> {
+  await ensureSchema();
+  if (IS_POSTGRES) {
+    const res = await (await getPgPool()).query(
+      `SELECT COUNT(*) AS count FROM blockers WHERE org_id = $1 AND task_id = $2 AND status = 'open'`,
+      [orgId, taskId]
+    );
+    return Number(res.rows[0]?.count) || 0;
+  }
+  const row = (await getSqliteDb())
+    .prepare(`SELECT COUNT(*) AS count FROM blockers WHERE org_id = ? AND task_id = ? AND status = 'open'`)
+    .get(orgId, taskId) as { count: number } | undefined;
+  return Number(row?.count) || 0;
+}
+
 export async function resolveBlocker(orgId: string, id: string): Promise<void> {
   await ensureSchema();
   const now = new Date().toISOString();

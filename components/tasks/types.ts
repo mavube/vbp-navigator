@@ -10,6 +10,8 @@ export interface ServiceOption {
 export interface Task {
   id: string;
   serviceId: string;
+  classId: string | null;
+  serviceRequestId: string | null;
   title: string;
   description: string;
   status: TaskStatus;
@@ -17,6 +19,7 @@ export interface Task {
   assigneeName: string;
   startDate: string | null;
   dueDate: string | null;
+  dependencies: string[];
 }
 
 export type BlockerImpact = "low" | "medium" | "high" | "critical";

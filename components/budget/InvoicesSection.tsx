@@ -14,7 +14,7 @@ const STATUS_TONE: Record<InvoiceStatus, "neutral" | "success" | "danger"> = {
   overdue: "danger",
 };
 
-export function InvoicesSection({ services }: { services: ServiceOption[] }) {
+export function InvoicesSection({ services, filterServiceId }: { services: ServiceOption[]; filterServiceId?: string }) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -119,11 +119,11 @@ export function InvoicesSection({ services }: { services: ServiceOption[] }) {
         <p style={{ color: "var(--v2-text-muted)" }}>Loading…</p>
       ) : error ? (
         <p style={{ color: "var(--v2-danger)" }}>{error}</p>
-      ) : invoices.length === 0 ? (
-        <p style={{ color: "var(--v2-text-muted)" }}>No invoices yet.</p>
+      ) : invoices.filter((i) => !filterServiceId || i.serviceId === filterServiceId).length === 0 ? (
+        <p style={{ color: "var(--v2-text-muted)" }}>{invoices.length === 0 ? "No invoices yet." : "No invoices for this service."}</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-2)" }}>
-          {invoices.map((inv) => (
+          {invoices.filter((i) => !filterServiceId || i.serviceId === filterServiceId).map((inv) => (
             <Card key={inv.id} style={{ padding: "var(--v2-space-3)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "var(--v2-space-2)" }}>
                 <div>

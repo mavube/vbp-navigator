@@ -66,7 +66,16 @@ export async function buildAiOrgSnapshot(orgId: string): Promise<AiOrgSnapshot> 
       hasProvider: !!s.providerId,
       hasBackup: !!s.backupId,
       outcome: s.outcome,
-      health: { status: health.status, reasons: health.reasons, capacity: health.capacity, demand: health.demand, people: health.people },
+      // v3.0 roadmap Phase 9 gave ServiceHealth.reasons a drill-down
+      // `href` for the UI (lib/service-health.ts) — the model has no use
+      // for a link, so only the plain text crosses into the prompt.
+      health: {
+        status: health.status,
+        reasons: health.reasons.map((r) => r.text),
+        capacity: health.capacity,
+        demand: health.demand,
+        people: health.people,
+      },
     };
   });
 

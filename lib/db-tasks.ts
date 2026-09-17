@@ -14,6 +14,12 @@ export interface TaskRow {
   id: string;
   serviceId: string;
   classId: string | null;
+  // v3.0 roadmap Phase 9 (Cluster B — Workflow wiring) — the link that
+  // lets a Task trace back to the Service Request it was spawned from
+  // (see app/api/service-requests/[id]/spawn-task or, more precisely,
+  // the "create task" action on RequestItem.tsx). Nullable, same shape
+  // as classId above.
+  serviceRequestId: string | null;
   title: string;
   description: string;
   status: TaskStatus;
@@ -29,6 +35,7 @@ export interface TaskRow {
 export interface NewTask {
   serviceId: string;
   classId?: string | null;
+  serviceRequestId?: string | null;
   title: string;
   description?: string;
   assigneeId?: string | null;
@@ -61,11 +68,12 @@ function ensureSchema(): Promise<void> {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )`);
-      // class_id (Phase 4), assignee_name (Phase 7), and start_date
-      // (Phase 6 of v3.0) were all added after this table first shipped
-      // — existing local dev.db files predate them, so add each
-      // defensively rather than requiring a fresh dev.db (mirrors the
-      // Postgres migrations' `add column if not exists`).
+      // class_id (Phase 4), assignee_name (Phase 7), start_date (Phase 6
+      // of v3.0), and service_request_id (Phase 9 of v3.0) were all
+      // added after this table first shipped — existing local dev.db
+      // files predate them, so add each defensively rather than
+      // requiring a fresh dev.db (mirrors the Postgres migrations'
+      // `add column if not exists`).
       const cols = db.prepare(`PRAGMA table_info(tasks)`).all() as Array<{ name: string }>;
       if (!cols.some((c) => c.name === "class_id")) {
         db.exec(`ALTER TABLE tasks ADD COLUMN class_id TEXT`);
@@ -75,6 +83,9 @@ function ensureSchema(): Promise<void> {
       }
       if (!cols.some((c) => c.name === "start_date")) {
         db.exec(`ALTER TABLE tasks ADD COLUMN start_date TEXT`);
+      }
+      if (!cols.some((c) => c.name === "service_request_id")) {
+        db.exec(`ALTER TABLE tasks ADD COLUMN service_request_id TEXT`);
       }
     })();
   }
@@ -86,6 +97,7 @@ function fromSqliteRow(row: Record<string, unknown>): TaskRow {
     id: row.id as string,
     serviceId: row.service_id as string,
     classId: (row.class_id as string) ?? null,
+    serviceRequestId: (row.service_request_id as string) ?? null,
     title: row.title as string,
     description: row.description as string,
     status: row.status as TaskStatus,
@@ -99,35 +111,80 @@ function fromSqliteRow(row: Record<string, unknown>): TaskRow {
   };
 }
 
-export async function listTasks(orgId: string, serviceId?: string, classId?: string): Promise<TaskRow[]> {
+// serviceRequestId filter added in v3.0 Phase 9 — lets RequestItem.tsx
+// ask "has a task already been spawned from this request?" without a
+// new endpoint. Kept as a fourth optional filter rather than a generic
+// query-object param, matching this function's existing shape.
+export async function listTasks(
+  orgId: string,
+  serviceId?: string,
+  classId?: string,
+  serviceRequestId?: string
+): Promise<TaskRow[]> {
   await ensureSchema();
-  const cols = `id, service_id AS "serviceId", class_id AS "classId", title, description, status,
+  const cols = `id, service_id AS "serviceId", class_id AS "classId", service_request_id AS "serviceRequestId",
+                  title, description, status,
                   assignee_id AS "assigneeId", assignee_name AS "assigneeName",
                   start_date AS "startDate", due_date AS "dueDate", dependencies,
                   created_at AS "createdAt", updated_at AS "updatedAt"`;
   if (IS_POSTGRES) {
-    const res = classId
+    const res = serviceRequestId
       ? await (await getPgPool()).query(
-          `SELECT ${cols} FROM tasks WHERE org_id = $1 AND class_id = $2 ORDER BY created_at DESC`,
-          [orgId, classId]
+          `SELECT ${cols} FROM tasks WHERE org_id = $1 AND service_request_id = $2 ORDER BY created_at DESC`,
+          [orgId, serviceRequestId]
         )
-      : serviceId
+      : classId
         ? await (await getPgPool()).query(
-            `SELECT ${cols} FROM tasks WHERE org_id = $1 AND service_id = $2 ORDER BY created_at DESC`,
-            [orgId, serviceId]
+            `SELECT ${cols} FROM tasks WHERE org_id = $1 AND class_id = $2 ORDER BY created_at DESC`,
+            [orgId, classId]
           )
-        : await (await getPgPool()).query(
-            `SELECT ${cols} FROM tasks WHERE org_id = $1 ORDER BY created_at DESC`,
-            [orgId]
-          );
+        : serviceId
+          ? await (await getPgPool()).query(
+              `SELECT ${cols} FROM tasks WHERE org_id = $1 AND service_id = $2 ORDER BY created_at DESC`,
+              [orgId, serviceId]
+            )
+          : await (await getPgPool()).query(
+              `SELECT ${cols} FROM tasks WHERE org_id = $1 ORDER BY created_at DESC`,
+              [orgId]
+            );
     return res.rows;
   }
   const db = await getSqliteDb();
-  const rows = classId
-    ? db.prepare(`SELECT * FROM tasks WHERE org_id = ? AND class_id = ? ORDER BY created_at DESC`).all(orgId, classId)
-    : serviceId
-      ? db.prepare(`SELECT * FROM tasks WHERE org_id = ? AND service_id = ? ORDER BY created_at DESC`).all(orgId, serviceId)
-      : db.prepare(`SELECT * FROM tasks WHERE org_id = ? ORDER BY created_at DESC`).all(orgId);
+  const rows = serviceRequestId
+    ? db.prepare(`SELECT * FROM tasks WHERE org_id = ? AND service_request_id = ? ORDER BY created_at DESC`).all(orgId, serviceRequestId)
+    : classId
+      ? db.prepare(`SELECT * FROM tasks WHERE org_id = ? AND class_id = ? ORDER BY created_at DESC`).all(orgId, classId)
+      : serviceId
+        ? db.prepare(`SELECT * FROM tasks WHERE org_id = ? AND service_id = ? ORDER BY created_at DESC`).all(orgId, serviceId)
+        : db.prepare(`SELECT * FROM tasks WHERE org_id = ? ORDER BY created_at DESC`).all(orgId);
+  return (rows as Record<string, unknown>[]).map(fromSqliteRow);
+}
+
+// Full rows for a known set of ids, org-scoped — v3.0 Phase 9 needs this
+// twice: resolving a task's own `dependencies` list into real rows (to
+// check they're all `done` before allowing it to advance) and, more
+// generally, anywhere a small batch of tasks needs to be read by id
+// rather than by service/class. Empty input short-circuits rather than
+// generating a query with an empty IN (...) list, which errors on some
+// drivers and is meaningless either way.
+export async function getTasksByIds(orgId: string, ids: string[]): Promise<TaskRow[]> {
+  if (ids.length === 0) return [];
+  await ensureSchema();
+  const cols = `id, service_id AS "serviceId", class_id AS "classId", service_request_id AS "serviceRequestId",
+                  title, description, status,
+                  assignee_id AS "assigneeId", assignee_name AS "assigneeName",
+                  start_date AS "startDate", due_date AS "dueDate", dependencies,
+                  created_at AS "createdAt", updated_at AS "updatedAt"`;
+  if (IS_POSTGRES) {
+    const res = await (await getPgPool()).query(
+      `SELECT ${cols} FROM tasks WHERE org_id = $1 AND id = ANY($2::uuid[])`,
+      [orgId, ids]
+    );
+    return res.rows;
+  }
+  const db = await getSqliteDb();
+  const placeholders = ids.map(() => "?").join(",");
+  const rows = db.prepare(`SELECT * FROM tasks WHERE org_id = ? AND id IN (${placeholders})`).all(orgId, ...ids);
   return (rows as Record<string, unknown>[]).map(fromSqliteRow);
 }
 
@@ -142,26 +199,28 @@ export async function createTask(orgId: string, input: NewTask): Promise<TaskRow
   const dueDate = input.dueDate ?? null;
   const dependencies = input.dependencies ?? [];
   const classId = input.classId ?? null;
+  const serviceRequestId = input.serviceRequestId ?? null;
 
   if (IS_POSTGRES) {
     await (await getPgPool()).query(
-      `INSERT INTO tasks (id, org_id, service_id, class_id, title, description, status, assignee_id, assignee_name, start_date, due_date, dependencies, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,'open',$7,$8,$9,$10,$11,$12,$12)`,
-      [id, orgId, input.serviceId, classId, input.title, description, assigneeId, assigneeName, startDate, dueDate, dependencies, now]
+      `INSERT INTO tasks (id, org_id, service_id, class_id, service_request_id, title, description, status, assignee_id, assignee_name, start_date, due_date, dependencies, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'open',$8,$9,$10,$11,$12,$13,$13)`,
+      [id, orgId, input.serviceId, classId, serviceRequestId, input.title, description, assigneeId, assigneeName, startDate, dueDate, dependencies, now]
     );
   } else {
     (await getSqliteDb())
       .prepare(
-        `INSERT INTO tasks (id, org_id, service_id, class_id, title, description, status, assignee_id, assignee_name, start_date, due_date, dependencies, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,'open',?,?,?,?,?,?,?)`
+        `INSERT INTO tasks (id, org_id, service_id, class_id, service_request_id, title, description, status, assignee_id, assignee_name, start_date, due_date, dependencies, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,'open',?,?,?,?,?,?,?)`
       )
-      .run(id, orgId, input.serviceId, classId, input.title, description, assigneeId, assigneeName, startDate, dueDate, JSON.stringify(dependencies), now, now);
+      .run(id, orgId, input.serviceId, classId, serviceRequestId, input.title, description, assigneeId, assigneeName, startDate, dueDate, JSON.stringify(dependencies), now, now);
   }
 
   return {
     id,
     serviceId: input.serviceId,
     classId,
+    serviceRequestId,
     title: input.title,
     description,
     status: "open",
@@ -188,6 +247,27 @@ export async function getTaskServiceId(orgId: string, id: string): Promise<strin
     | { service_id: string }
     | undefined;
   return row?.service_id ?? null;
+}
+
+// Full row by id — v3.0 Phase 9 needs a task's own `status` (to decide
+// whether resolving its last blocker should advance it) and its
+// `dependencies` (to enforce them on a status change), neither of which
+// the existing service-id-only getter carries.
+export async function getTask(orgId: string, id: string): Promise<TaskRow | null> {
+  await ensureSchema();
+  const cols = `id, service_id AS "serviceId", class_id AS "classId", service_request_id AS "serviceRequestId",
+                  title, description, status,
+                  assignee_id AS "assigneeId", assignee_name AS "assigneeName",
+                  start_date AS "startDate", due_date AS "dueDate", dependencies,
+                  created_at AS "createdAt", updated_at AS "updatedAt"`;
+  if (IS_POSTGRES) {
+    const res = await (await getPgPool()).query(`SELECT ${cols} FROM tasks WHERE org_id = $1 AND id = $2`, [orgId, id]);
+    return res.rows[0] ?? null;
+  }
+  const row = (await getSqliteDb()).prepare(`SELECT * FROM tasks WHERE org_id = ? AND id = ?`).get(orgId, id) as
+    | Record<string, unknown>
+    | undefined;
+  return row ? fromSqliteRow(row) : null;
 }
 
 export async function updateTaskStatus(orgId: string, id: string, status: TaskStatus): Promise<void> {

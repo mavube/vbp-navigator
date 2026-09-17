@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getTaskServiceId, updateTaskStatus, updateTaskDates, type TaskStatus } from "@/lib/db-tasks";
+import { getTask, getTasksByIds, updateTaskStatus, updateTaskDates, type TaskStatus } from "@/lib/db-tasks";
 import { getUserContext, canManageService } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +11,14 @@ const VALID_STATUSES: TaskStatus[] = ["open", "in_progress", "done"];
 // views). Same gate for both: that task's service's Service Owner/
 // Contributor or an Org Admin, matching the RLS policy in
 // supabase/migrations/0003_phase2_tasks.sql.
+//
+// v3.0 Phase 9 (Cluster B) enforcement: `dependencies` has been on the
+// schema since Phase 2 and rendered nowhere and enforced nowhere (see
+// lib/db-tasks.ts's TaskRow comment) — closing that means a task that
+// lists other tasks as dependencies can't move to in_progress or done
+// while any of them isn't done yet. Moving *to* "open" is never
+// blocked (that's always a safe, backward step); done-ness only
+// matters going forward.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
@@ -27,12 +35,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const ctx = await getUserContext();
-  const serviceId = await getTaskServiceId(ctx.orgId, id);
-  if (!serviceId) {
+  const task = await getTask(ctx.orgId, id);
+  if (!task) {
     return NextResponse.json({ error: "Task not found" }, { status: 404 });
   }
-  if (!canManageService(ctx, serviceId)) {
+  if (!canManageService(ctx, task.serviceId)) {
     return NextResponse.json({ error: "Not allowed to update this task" }, { status: 403 });
+  }
+
+  if (hasStatus && (body.status === "in_progress" || body.status === "done") && task.dependencies.length > 0) {
+    const deps = await getTasksByIds(ctx.orgId, task.dependencies);
+    const unmet = deps.filter((d) => d.status !== "done");
+    if (unmet.length > 0) {
+      return NextResponse.json(
+        {
+          error: `Blocked by ${unmet.length} unfinished ${unmet.length === 1 ? "dependency" : "dependencies"}: ${unmet
+            .map((d) => d.title)
+            .join(", ")}`,
+        },
+        { status: 400 }
+      );
+    }
   }
 
   if (hasStatus) {

@@ -17,7 +17,12 @@ interface OrgKpiSummary {
   servicesAtRisk: number;
   blockersHighImpactOpen: number;
   tasksOverdue: number;
-  atRiskServices: Array<{ serviceId: string; serviceName: string; status: string; reasons: string[] }>;
+  atRiskServices: Array<{
+    serviceId: string;
+    serviceName: string;
+    status: string;
+    reasons: Array<{ text: string; href: string | null }>;
+  }>;
 }
 
 interface FiscalYearTotals {
@@ -182,7 +187,21 @@ export function DashboardView() {
                 <div>
                   <strong>{s.serviceName}</strong>
                   {s.reasons.length > 0 && (
-                    <span style={{ fontSize: "0.78rem", color: "var(--v2-text-muted)" }}> — {s.reasons.join("; ")}</span>
+                    <span style={{ fontSize: "0.78rem", color: "var(--v2-text-muted)" }}>
+                      {" — "}
+                      {s.reasons.map((reason, i) => (
+                        <span key={i}>
+                          {i > 0 && "; "}
+                          {reason.href ? (
+                            <Link href={reason.href} style={{ color: "var(--v2-accent)" }}>
+                              {reason.text}
+                            </Link>
+                          ) : (
+                            reason.text
+                          )}
+                        </span>
+                      ))}
+                    </span>
                   )}
                 </div>
                 <Badge tone="danger">At risk</Badge>

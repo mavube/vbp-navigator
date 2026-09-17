@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Section } from "@/components/ui/Section";
 import { NewTaskForm } from "@/components/tasks/NewTaskForm";
 import { TaskItem } from "@/components/tasks/TaskItem";
@@ -23,6 +25,12 @@ const VIEWS: { key: ViewMode; label: string }[] = [
 // a Blockers section beneath — Blocker Intelligence isn't a separate
 // page, it's part of the same work surface, since a blocker is always
 // about work already tracked here.
+//
+// v3.0 Phase 9 (Cluster B) added `?service=<id>` and
+// `&focus=overdue`/`&focus=blocked` query params — the drill-down
+// destination for Service Health's reasons (lib/service-health.ts) and
+// the Dashboard's at-risk list, neither of which previously had
+// anywhere to send someone besides "go look at Tasks yourself."
 export function TaskBoard() {
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -30,6 +38,11 @@ export function TaskBoard() {
   const [view, setView] = useState<ViewMode>("list");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [unblockedNote, setUnblockedNote] = useState("");
+
+  const searchParams = useSearchParams();
+  const filterServiceId = searchParams.get("service") || "";
+  const focus = searchParams.get("focus") || "";
 
   async function loadAll() {
     try {
@@ -80,10 +93,46 @@ export function TaskBoard() {
     }
   }
 
+  const today = new Date().toISOString().slice(0, 10);
+  const filteredTasks = tasks
+    .filter((t) => !filterServiceId || t.serviceId === filterServiceId)
+    .filter((t) => {
+      if (focus === "overdue") return t.status !== "done" && !!t.dueDate && t.dueDate < today;
+      if (focus === "blocked") return blockedTaskIds.has(t.id);
+      return true;
+    });
+  const filteredBlockers = filterServiceId ? blockers.filter((b) => b.serviceId === filterServiceId) : blockers;
+  const filterLabel = filterServiceId ? services.find((s) => s.id === filterServiceId)?.name ?? "this service" : "";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-6)" }}>
+      {filterServiceId && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "var(--v2-space-2)",
+            padding: "var(--v2-space-3)",
+            background: "var(--v2-accent-soft)",
+            borderRadius: "var(--v2-radius-sm)",
+            fontSize: "0.85rem",
+          }}
+        >
+          <span>
+            Showing {focus === "overdue" ? "overdue tasks" : focus === "blocked" ? "blocked tasks" : "tasks and blockers"} for{" "}
+            <strong>{filterLabel}</strong>
+          </span>
+          <Link href="/tasks" style={{ color: "var(--v2-accent)" }}>
+            Clear filter
+          </Link>
+        </div>
+      )}
+
+      {unblockedNote && <p style={{ color: "var(--v2-success)", margin: 0, fontSize: "0.85rem" }}>{unblockedNote}</p>}
+
       <Section title="Add a task" description="Every task belongs to a service — never a department or just a person. Start/due dates are optional but power the Gantt and Calendar views below.">
-        <NewTaskForm services={services} onCreated={(task) => setTasks((prev) => [task, ...prev])} />
+        <NewTaskForm services={services} tasks={tasks} onCreated={(task) => setTasks((prev) => [task, ...prev])} />
       </Section>
 
       {services.length === 0 && (
@@ -117,37 +166,53 @@ export function TaskBoard() {
           </div>
         }
       >
-        {tasks.length === 0 ? (
-          <p style={{ color: "var(--v2-text-muted)", margin: 0 }}>No tasks yet.</p>
+        {filteredTasks.length === 0 ? (
+          <p style={{ color: "var(--v2-text-muted)", margin: 0 }}>
+            {tasks.length === 0 ? "No tasks yet." : "No tasks match this filter."}
+          </p>
         ) : view === "list" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-3)" }}>
-            {tasks.map((task) => (
+            {filteredTasks.map((task) => (
               <TaskItem
                 key={task.id}
                 task={task}
                 serviceName={serviceName(task.serviceId)}
                 openBlockerCount={openBlockerCountByTask.get(task.id) ?? 0}
+                allTasks={tasks}
                 onStatusChange={(status) => setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status } : t)))}
                 onDatesChange={(dates) => setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...dates } : t)))}
               />
             ))}
           </div>
         ) : view === "kanban" ? (
-          <TaskKanban tasks={tasks} serviceName={serviceName} blockedTaskIds={blockedTaskIds} onStatusChange={patchStatus} />
+          <TaskKanban tasks={filteredTasks} serviceName={serviceName} blockedTaskIds={blockedTaskIds} onStatusChange={patchStatus} />
         ) : view === "gantt" ? (
-          <TaskGantt tasks={tasks} serviceName={serviceName} blockedTaskIds={blockedTaskIds} />
+          <TaskGantt tasks={filteredTasks} serviceName={serviceName} blockedTaskIds={blockedTaskIds} />
         ) : (
-          <TaskCalendar tasks={tasks} serviceName={serviceName} blockedTaskIds={blockedTaskIds} />
+          <TaskCalendar tasks={filteredTasks} serviceName={serviceName} blockedTaskIds={blockedTaskIds} />
         )}
       </Section>
 
       <BlockersPanel
         services={services}
         tasks={tasks}
-        blockers={blockers}
+        blockers={filteredBlockers}
         serviceName={serviceName}
         onCreated={(b) => setBlockers((prev) => [b, ...prev])}
-        onResolved={(id) => setBlockers((prev) => prev.map((b) => (b.id === id ? { ...b, status: "resolved", resolvedAt: new Date().toISOString() } : b)))}
+        onResolved={(result) => {
+          setBlockers((prev) =>
+            prev.map((b) => (b.id === result.id ? { ...b, status: "resolved", resolvedAt: new Date().toISOString() } : b))
+          );
+          if (result.unblockedTaskId && result.unblockedTaskStatus) {
+            setTasks((prev) =>
+              prev.map((t) => (t.id === result.unblockedTaskId ? { ...t, status: result.unblockedTaskStatus! } : t))
+            );
+            const unblocked = tasks.find((t) => t.id === result.unblockedTaskId);
+            setUnblockedNote(
+              `"${unblocked?.title ?? "That task"}" had no blockers left, so it was moved to In progress automatically.`
+            );
+          }
+        }}
       />
     </div>
   );

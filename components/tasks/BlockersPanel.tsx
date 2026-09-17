@@ -38,7 +38,10 @@ export function BlockersPanel({
   blockers: Blocker[];
   serviceName: (serviceId: string) => string;
   onCreated: (b: Blocker) => void;
-  onResolved: (id: string) => void;
+  // v3.0 roadmap Phase 9 — resolving now returns whether it auto-
+  // unblocked a linked task (see app/api/blockers/[id]/route.ts), so
+  // the caller gets the full response instead of just the blocker id.
+  onResolved: (result: { id: string; unblockedTaskId?: string | null; unblockedTaskStatus?: "in_progress" | null }) => void;
 }) {
   const [serviceId, setServiceId] = useState("");
   const [taskId, setTaskId] = useState("");
@@ -90,7 +93,10 @@ export function BlockersPanel({
       body: JSON.stringify({ action: "resolve" }),
     });
     setResolvingId(null);
-    if (res.ok) onResolved(id);
+    if (res.ok) {
+      const result = await res.json().catch(() => ({ id }));
+      onResolved(result);
+    }
   }
 
   return (

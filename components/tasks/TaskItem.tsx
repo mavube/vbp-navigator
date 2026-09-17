@@ -26,12 +26,19 @@ export function TaskItem({
   task,
   serviceName,
   openBlockerCount = 0,
+  allTasks = [],
   onStatusChange,
   onDatesChange,
 }: {
   task: Task;
   serviceName: string;
   openBlockerCount?: number;
+  // v3.0 roadmap Phase 9 — the full task list, so this card can resolve
+  // its own `dependencies` ids into real titles/statuses and block the
+  // advance buttons client-side (the server enforces the same rule
+  // regardless — see app/api/tasks/[id]/route.ts — this is just so the
+  // person doesn't have to click "Mark in progress" to find out).
+  allTasks?: Task[];
   onStatusChange: (status: TaskStatus) => void;
   onDatesChange?: (dates: { startDate: string | null; dueDate: string | null }) => void;
 }) {
@@ -42,6 +49,11 @@ export function TaskItem({
   const [savingDates, setSavingDates] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<TaskStatus | null>(null);
   const busy = pendingStatus !== null || savingDates;
+
+  const dependencyTasks = task.dependencies
+    .map((id) => allTasks.find((t) => t.id === id))
+    .filter((t): t is Task => !!t);
+  const unmetDependencies = dependencyTasks.filter((t) => t.status !== "done");
 
   async function setStatus(status: TaskStatus) {
     setError("");
@@ -102,19 +114,23 @@ export function TaskItem({
           <Badge tone={STATUS_TONE[task.status]}>{STATUS_LABEL[task.status]}</Badge>
           {(["open", "in_progress", "done"] as TaskStatus[])
             .filter((s) => s !== task.status)
-            .map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setStatus(s)}
-                disabled={busy}
-                className={`v2-btn v2-btn-secondary ${pendingStatus === s ? "v2-btn-busy" : ""}`}
-                style={{ padding: "4px 10px", fontSize: "0.75rem" }}
-              >
-                {pendingStatus === s && <Spinner />}
-                {pendingStatus === s ? "Marking…" : `Mark ${STATUS_LABEL[s].toLowerCase()}`}
-              </button>
-            ))}
+            .map((s) => {
+              const blockedByDeps = s !== "open" && unmetDependencies.length > 0;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStatus(s)}
+                  disabled={busy || blockedByDeps}
+                  title={blockedByDeps ? `Waiting on: ${unmetDependencies.map((t) => t.title).join(", ")}` : undefined}
+                  className={`v2-btn v2-btn-secondary ${pendingStatus === s ? "v2-btn-busy" : ""}`}
+                  style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+                >
+                  {pendingStatus === s && <Spinner />}
+                  {pendingStatus === s ? "Marking…" : `Mark ${STATUS_LABEL[s].toLowerCase()}`}
+                </button>
+              );
+            })}
           <button
             type="button"
             onClick={() => setEditingDates((v) => !v)}
@@ -126,6 +142,20 @@ export function TaskItem({
           </button>
         </div>
       </div>
+
+      {dependencyTasks.length > 0 && (
+        <div style={{ fontSize: "0.78rem", color: "var(--v2-text-muted)", marginTop: "8px" }}>
+          Depends on:{" "}
+          {dependencyTasks.map((t, i) => (
+            <span key={t.id}>
+              {i > 0 && ", "}
+              <span style={{ color: t.status === "done" ? "var(--v2-success)" : "var(--v2-text-muted)" }}>
+                {t.title} {t.status === "done" ? "✓" : "○"}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
 
       {editingDates && (
         <div style={{ display: "flex", gap: "var(--v2-space-2)", alignItems: "flex-end", marginTop: "var(--v2-space-3)", flexWrap: "wrap" }}>

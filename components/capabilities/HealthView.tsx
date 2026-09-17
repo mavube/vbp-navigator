@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import type { ServiceOption, ServiceHealth, HealthStatus, CapacitySignal } from "@/components/capabilities/types";
@@ -74,7 +75,15 @@ export function HealthView({ services, health }: { services: ServiceOption[]; he
             {h.reasons.length > 0 && (
               <ul style={{ margin: "var(--v2-space-2) 0 0", paddingLeft: "1.1rem", fontSize: "0.8rem", color: "var(--v2-text-muted)" }}>
                 {h.reasons.map((reason, i) => (
-                  <li key={i}>{reason}</li>
+                  <li key={i}>
+                    {reason.href ? (
+                      <Link href={reason.href} style={{ color: "var(--v2-accent)" }}>
+                        {reason.text}
+                      </Link>
+                    ) : (
+                      reason.text
+                    )}
+                  </li>
                 ))}
               </ul>
             )}

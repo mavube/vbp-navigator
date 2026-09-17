@@ -6,7 +6,13 @@ import { NewBudgetRequestForm } from "@/components/budget/NewBudgetRequestForm";
 import { BudgetRequestItem } from "@/components/budget/BudgetRequestItem";
 import type { ServiceOption, BudgetRequest } from "@/components/budget/types";
 
-export function BudgetRequestsSection({ services }: { services: ServiceOption[] }) {
+export function BudgetRequestsSection({
+  services,
+  filterServiceId,
+}: {
+  services: ServiceOption[];
+  filterServiceId?: string;
+}) {
   const [requests, setRequests] = useState<BudgetRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -32,11 +38,13 @@ export function BudgetRequestsSection({ services }: { services: ServiceOption[] 
         <p style={{ color: "var(--v2-text-muted)" }}>Loading…</p>
       ) : error ? (
         <p style={{ color: "var(--v2-danger)" }}>{error}</p>
-      ) : requests.length === 0 ? (
-        <p style={{ color: "var(--v2-text-muted)" }}>No budget requests yet.</p>
+      ) : requests.filter((r) => !filterServiceId || r.serviceId === filterServiceId).length === 0 ? (
+        <p style={{ color: "var(--v2-text-muted)" }}>
+          {requests.length === 0 ? "No budget requests yet." : "No budget requests for this service."}
+        </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-3)" }}>
-          {requests.map((req) => (
+          {requests.filter((r) => !filterServiceId || r.serviceId === filterServiceId).map((req) => (
             <BudgetRequestItem
               key={req.id}
               request={req}

@@ -53,10 +53,17 @@ export interface FiscalYearTotals {
 export type HealthStatus = "healthy" | "attention" | "at_risk";
 export type CapacitySignal = "idle" | "balanced" | "stretched" | "overloaded";
 
+// v3.0 roadmap Phase 9 — matches lib/service-health.ts's
+// ServiceHealthReason: a reason with an optional drill-down link.
+export interface ServiceHealthReason {
+  text: string;
+  href: string | null;
+}
+
 export interface ServiceHealth {
   serviceId: string;
   status: HealthStatus;
-  reasons: string[];
+  reasons: ServiceHealthReason[];
   demand: number;
   people: number;
   capacity: CapacitySignal;

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { BudgetRequestsSection } from "@/components/budget/BudgetRequestsSection";
 import { ExpensesSection } from "@/components/budget/ExpensesSection";
 import { InvoicesSection } from "@/components/budget/InvoicesSection";
@@ -17,11 +19,18 @@ const TABS: Array<{ key: Tab; label: string }> = [
 // active, rather than each of the three sections fetching it
 // separately — the sections themselves stay simple, self-contained
 // fetch+form+list components (same shape as Tasks/Pipeline/Classes).
+//
+// v3.0 Phase 9 (Cluster B) added `?service=<id>`, read here and passed
+// down as `filterServiceId` — the drill-down destination for Service
+// Health's "Expenses exceed approved budget" reason
+// (lib/service-health.ts), which previously had nowhere to send anyone.
 export function BudgetWorkspace() {
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [tab, setTab] = useState<Tab>("requests");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const searchParams = useSearchParams();
+  const filterServiceId = searchParams.get("service") || "";
 
   useEffect(() => {
     // A failed fetch used to be silently converted into an empty
@@ -47,8 +56,32 @@ export function BudgetWorkspace() {
   if (loading) return <p style={{ color: "var(--v2-text-muted)" }}>Loading…</p>;
   if (error) return <p style={{ color: "var(--v2-danger)" }}>{error}</p>;
 
+  const filterLabel = filterServiceId ? services.find((s) => s.id === filterServiceId)?.name ?? "this service" : "";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-6)" }}>
+      {filterServiceId && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "var(--v2-space-2)",
+            padding: "var(--v2-space-3)",
+            background: "var(--v2-accent-soft)",
+            borderRadius: "var(--v2-radius-sm)",
+            fontSize: "0.85rem",
+          }}
+        >
+          <span>
+            Showing entries for <strong>{filterLabel}</strong>
+          </span>
+          <Link href="/budget" style={{ color: "var(--v2-accent)" }}>
+            Clear filter
+          </Link>
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: "var(--v2-space-2)", borderBottom: "1px solid var(--v2-border)" }}>
         {TABS.map((t) => (
           <button
@@ -78,9 +111,9 @@ export function BudgetWorkspace() {
         </p>
       )}
 
-      {tab === "requests" && <BudgetRequestsSection services={services} />}
-      {tab === "expenses" && <ExpensesSection services={services} />}
-      {tab === "invoices" && <InvoicesSection services={services} />}
+      {tab === "requests" && <BudgetRequestsSection services={services} filterServiceId={filterServiceId} />}
+      {tab === "expenses" && <ExpensesSection services={services} filterServiceId={filterServiceId} />}
+      {tab === "invoices" && <InvoicesSection services={services} filterServiceId={filterServiceId} />}
     </div>
   );
 }

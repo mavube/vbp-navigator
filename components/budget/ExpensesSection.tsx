@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import type { ServiceOption, Expense } from "@/components/budget/types";
 
-export function ExpensesSection({ services }: { services: ServiceOption[] }) {
+export function ExpensesSection({ services, filterServiceId }: { services: ServiceOption[]; filterServiceId?: string }) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -97,11 +97,13 @@ export function ExpensesSection({ services }: { services: ServiceOption[] }) {
         <p style={{ color: "var(--v2-text-muted)" }}>Loading…</p>
       ) : error ? (
         <p style={{ color: "var(--v2-danger)" }}>{error}</p>
-      ) : expenses.length === 0 ? (
-        <p style={{ color: "var(--v2-text-muted)" }}>No expenses logged yet.</p>
+      ) : expenses.filter((e) => !filterServiceId || e.serviceId === filterServiceId).length === 0 ? (
+        <p style={{ color: "var(--v2-text-muted)" }}>
+          {expenses.length === 0 ? "No expenses logged yet." : "No expenses for this service."}
+        </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-2)" }}>
-          {expenses.map((exp) => (
+          {expenses.filter((e) => !filterServiceId || e.serviceId === filterServiceId).map((exp) => (
             <Card key={exp.id} style={{ padding: "var(--v2-space-3)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "var(--v2-space-2)" }}>
                 <div>
