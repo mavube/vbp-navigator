@@ -21,8 +21,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const orgId = await getCurrentOrgId();
   try {
-    const lead = await promoteProspectToLead(orgId, id, body.serviceId);
-    return NextResponse.json({ leadId: lead.id }, { status: 201 });
+    const { lead, duplicateWarning } = await promoteProspectToLead(orgId, id, body.serviceId);
+    return NextResponse.json({ leadId: lead.id, duplicateWarning }, { status: 201 });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Couldn't promote prospect" }, { status: 400 });
   }

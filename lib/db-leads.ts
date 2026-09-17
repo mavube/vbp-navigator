@@ -156,6 +156,32 @@ export async function getLead(orgId: string, id: string): Promise<LeadRow | null
   return row ? fromSqliteRow(row) : null;
 }
 
+// v3.0 roadmap Phase 10 (Cluster C) — used only by
+// lib/db-prospects.ts's promoteProspectToLead, to warn (not block) when
+// promoting a prospect would create a second lead for someone who
+// already has one on file. Plain exact-match by email, same as
+// lib/db-customers.ts's findCustomerByEmail — a blank email can't be
+// deduped, same documented limitation as that function.
+export async function findLeadByEmail(orgId: string, email: string): Promise<LeadRow | null> {
+  if (!email) return null;
+  await ensureSchema();
+  if (IS_POSTGRES) {
+    const res = await (await getPgPool()).query(
+      `SELECT id, service_id AS "serviceId", contact_name AS "contactName",
+              contact_email AS "contactEmail", contact_phone AS "contactPhone",
+              stage, owner_id AS "ownerId", notes,
+              created_at AS "createdAt", updated_at AS "updatedAt"
+       FROM leads WHERE org_id = $1 AND contact_email = $2 ORDER BY created_at DESC LIMIT 1`,
+      [orgId, email]
+    );
+    return res.rows[0] ?? null;
+  }
+  const row = (await getSqliteDb())
+    .prepare(`SELECT * FROM leads WHERE org_id = ? AND contact_email = ? ORDER BY created_at DESC LIMIT 1`)
+    .get(orgId, email) as Record<string, unknown> | undefined;
+  return row ? fromSqliteRow(row) : null;
+}
+
 export async function getLeadServiceId(orgId: string, id: string): Promise<string | null> {
   await ensureSchema();
   if (IS_POSTGRES) {

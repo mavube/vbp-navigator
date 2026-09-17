@@ -1,9 +1,14 @@
 // Data layer for the `customers` table — schema in
-// supabase/migrations/0012_phase4_customer_engagement.sql. Populated
-// only by lib/db-engagements.ts's admitLead (the "prospect converts
-// into a full customer record on admission" behavior) — there's no
-// direct create-a-customer form, matching the v3.0 roadmap's framing of
-// Customer as the entity a Lead graduates into, not a separate intake.
+// supabase/migrations/0012_phase4_customer_engagement.sql. Originally
+// populated only by lib/db-engagements.ts's admitLead (the "prospect
+// converts into a full customer record on admission" behavior); v3.0
+// roadmap Phase 10 (Cluster C) added a direct create/edit path
+// (app/api/customers/route.ts, app/api/customers/[id]/route.ts) for the
+// real gap that framing left open — fixing a contact detail after the
+// fact, or adding a customer who never came through Pipeline at all
+// (e.g. a walk-in). Both paths share the same email-dedupe rule below,
+// so a manual "add customer" for an email that already exists reuses
+// the existing row instead of creating a duplicate.
 
 import { randomUUID } from "node:crypto";
 import { IS_POSTGRES, getPgPool, getSqliteDb } from "@/lib/db-driver";
@@ -93,7 +98,11 @@ export async function getCustomerById(orgId: string, id: string): Promise<Custom
   return row ? fromSqliteRow(row) : null;
 }
 
-async function findCustomerByEmail(orgId: string, email: string): Promise<CustomerRow | null> {
+// Exported (v3.0 roadmap Phase 10) so lib/db-prospects.ts's
+// promoteProspectToLead can check for an existing Customer by email
+// before creating a second Lead for the same person — see that
+// function's own comment for why this is a warning, not a block.
+export async function findCustomerByEmail(orgId: string, email: string): Promise<CustomerRow | null> {
   if (!email) return null;
   await ensureSchema();
   if (IS_POSTGRES) {
@@ -109,7 +118,11 @@ async function findCustomerByEmail(orgId: string, email: string): Promise<Custom
   return row ? fromSqliteRow(row) : null;
 }
 
-async function createCustomer(orgId: string, input: NewCustomer): Promise<CustomerRow> {
+// v3.0 roadmap Phase 10 (Cluster C) — exported so the new "add a
+// customer" form (app/api/customers/route.ts's POST) can create one
+// directly, not just via lead admission. Kept as the same function
+// admission already used internally, not a parallel insert path.
+export async function createCustomer(orgId: string, input: NewCustomer): Promise<CustomerRow> {
   await ensureSchema();
   const id = randomUUID();
   const now = new Date().toISOString();
@@ -147,6 +160,62 @@ export async function findOrCreateCustomerByEmail(orgId: string, input: NewCusto
   const existing = await findCustomerByEmail(orgId, input.email ?? "");
   if (existing) return existing;
   return createCustomer(orgId, input);
+}
+
+// v3.0 roadmap Phase 10 (Cluster C) — same dedupe as above, but also
+// tells the caller whether it got back an existing row or a freshly
+// created one, so app/api/customers/route.ts's manual "add customer"
+// form can say so ("this customer already existed") instead of the
+// caller re-querying to find out.
+export async function findOrCreateCustomerByEmailWithFlag(
+  orgId: string,
+  input: NewCustomer
+): Promise<{ customer: CustomerRow; existed: boolean }> {
+  const existing = await findCustomerByEmail(orgId, input.email ?? "");
+  if (existing) return { customer: existing, existed: true };
+  return { customer: await createCustomer(orgId, input), existed: false };
+}
+
+// v3.0 roadmap Phase 10 (Cluster C) — the one other gap besides
+// create: fixing a contact detail after the fact (a lead admitted with
+// a typo'd phone number, an org name that changes). Partial update —
+// only the fields actually passed are touched, everything else keeps
+// its current value via COALESCE, same pattern lib/db-engagements.ts's
+// updateEngagementStatus already uses for its optional outcomeNote.
+export interface CustomerPatch {
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  organizationName?: string;
+}
+
+export async function updateCustomer(orgId: string, id: string, patch: CustomerPatch): Promise<void> {
+  await ensureSchema();
+  const now = new Date().toISOString();
+  if (IS_POSTGRES) {
+    await (await getPgPool()).query(
+      `UPDATE customers SET
+         full_name = COALESCE($1, full_name),
+         email = COALESCE($2, email),
+         phone = COALESCE($3, phone),
+         organization_name = COALESCE($4, organization_name),
+         updated_at = $5
+       WHERE org_id = $6 AND id = $7`,
+      [patch.fullName ?? null, patch.email ?? null, patch.phone ?? null, patch.organizationName ?? null, now, orgId, id]
+    );
+  } else {
+    (await getSqliteDb())
+      .prepare(
+        `UPDATE customers SET
+           full_name = COALESCE(?, full_name),
+           email = COALESCE(?, email),
+           phone = COALESCE(?, phone),
+           organization_name = COALESCE(?, organization_name),
+           updated_at = ?
+         WHERE org_id = ? AND id = ?`
+      )
+      .run(patch.fullName ?? null, patch.email ?? null, patch.phone ?? null, patch.organizationName ?? null, now, orgId, id);
+  }
 }
 
 export function ensureCustomersSchema(): Promise<void> {

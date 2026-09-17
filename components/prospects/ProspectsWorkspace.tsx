@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Card } from "@/components/ui/Card";
 import { ProspectItem } from "@/components/prospects/ProspectItem";
+import { NewProspectForm } from "@/components/prospects/NewProspectForm";
 import type { Prospect, ServiceOption } from "@/components/prospects/types";
 
 // v3.0 roadmap Phase 4 — the staff-facing review queue for everyone who
@@ -46,6 +48,10 @@ export function ProspectsWorkspace() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-6)" }}>
+      <Card>
+        <NewProspectForm services={services} onCreated={(p) => setProspects((prev) => [p, ...prev])} />
+      </Card>
+
       {prospects.length === 0 && (
         <p style={{ color: "var(--v2-text-muted)" }}>
           Nobody has come in through the public application or assessment forms yet.

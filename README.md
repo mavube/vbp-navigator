@@ -1,173 +1,167 @@
-# VBP Navigator OS — v3.0 roadmap, Phase 9 "Cluster B: Workflow wiring"
+# VBP Navigator OS — v3.0 roadmap, Phase 10 "Cluster C: Business-grade forms"
 
-This package closes six dead ends the v3.0 enhancement backlog called out under
-"Workflow wiring" — places where the app recorded data but never *acted* on it.
-Nothing here is a new module; it's the connective tissue between modules that
-already existed.
+This package closes the five items the v3.0 enhancement backlog called out under
+"Business-grade forms" — the cluster the backlog itself described as needing
+the most schema/scope growth: two entities (Customers, a Class roster) that
+had no create path at all, plus real depth added to three that already
+existed (Invoices, Prospects, Documents).
 
 ## What's in this zip
 
-25 files: 1 new migration, 5 changed `lib/` modules, 4 changed API routes, and
-15 changed components. Every file replaces the file at the same path in your
-project. No files are deleted or renamed.
+30 files: 1 new migration, 6 changed/new `lib/` modules, 8 API route files
+(3 brand new), and 15 changed/new components. Every file replaces the file at
+the same path in your project; new paths are new files.
 
 ```
-supabase/migrations/0016_phase9_workflow_wiring.sql   (new)
-lib/db-tasks.ts
-lib/db-blockers.ts
-lib/service-health.ts
-lib/rollups.ts
-lib/ai-context.ts
-app/api/blockers/[id]/route.ts
-app/api/classes/[id]/route.ts
-app/api/tasks/route.ts
-app/api/tasks/[id]/route.ts
-app/tasks/page.tsx
-app/budget/page.tsx
-components/capabilities/types.ts
-components/capabilities/HealthView.tsx
-components/dashboard/DashboardView.tsx
-components/tasks/types.ts
-components/tasks/NewTaskForm.tsx
-components/tasks/TaskItem.tsx
-components/tasks/BlockersPanel.tsx
-components/tasks/TaskBoard.tsx
-components/budget/BudgetWorkspace.tsx
-components/budget/ExpensesSection.tsx
-components/budget/BudgetRequestsSection.tsx
+supabase/migrations/0017_phase10_business_forms.sql   (new)
+lib/db-invoices.ts
+lib/db-customers.ts
+lib/db-leads.ts
+lib/db-prospects.ts
+lib/db-enrollments.ts                                  (new)
+lib/db-documents.ts
+app/api/invoices/route.ts
+app/api/customers/route.ts
+app/api/customers/[id]/route.ts                         (new)
+app/api/prospects/route.ts
+app/api/prospects/[id]/promote/route.ts
+app/api/classes/[id]/enrollments/route.ts                (new)
+app/api/classes/[id]/enrollments/[enrollmentId]/route.ts (new)
+app/api/documents/route.ts
+components/budget/types.ts
 components/budget/InvoicesSection.tsx
+components/customers/types.ts
+components/customers/NewCustomerForm.tsx                 (new)
+components/customers/CustomerItem.tsx                    (new)
+components/customers/CustomersWorkspace.tsx
+components/prospects/types.ts
+components/prospects/NewProspectForm.tsx                 (new)
+components/prospects/ProspectsWorkspace.tsx
+components/prospects/ProspectItem.tsx
+components/classes/types.ts
 components/classes/ClassItem.tsx
-components/service-requests/RequestItem.tsx
+components/documents/types.ts
+components/documents/NewDocumentForm.tsx
+components/documents/DocumentItem.tsx
 ```
 
 ## Required: run the migration first
 
-`supabase/migrations/0016_phase9_workflow_wiring.sql` adds one column:
+`supabase/migrations/0017_phase10_business_forms.sql` makes five changes:
 
-```sql
-alter table tasks add column if not exists service_request_id uuid
-  references service_requests (id) on delete set null;
-create index if not exists tasks_service_request_id_idx on tasks (service_request_id);
-```
+1. `invoices.line_items` — a JSONB array, default `'[]'`.
+2. Customers — no schema change; create/edit reuse the existing table and its
+   existing partial-unique email index.
+3. `prospects` — widens the `source` check constraint to allow `'manual'`
+   alongside the existing `'apply'`/`'assessment'`.
+4. `class_enrollments` — a brand-new table (id, class_id, customer_id,
+   status, timestamps), unique on `(class_id, customer_id)`, with RLS
+   policies gated the same way every other class write is.
+5. `documents.attachment_url` — a plain text column, default `''`.
 
-Run it against your Supabase Postgres database before (or immediately after)
-deploying this code — item 4 (service request → task) needs the column to
-exist. Everything else in this phase reuses columns that already existed
-(including `invoices.class_id`, added back in migration 0006 and never used
-until now).
+Run it against your Supabase Postgres database before deploying this code.
+Local SQLite (`dev.db`) doesn't need a manual step — every affected
+`lib/db-*.ts` module adds its column(s) defensively (`PRAGMA table_info` +
+`ALTER TABLE ... ADD COLUMN`) on next server start, same pattern every prior
+phase has used, and `lib/db-enrollments.ts` creates its own table the first
+time it's touched, same as every other module.
 
-Local SQLite (`dev.db`) doesn't need a manual step — `lib/db-tasks.ts`'s
-`ensureSchema()` adds the column defensively on next server start, the same
-pattern every prior phase has used for local dev databases.
+## The five items
 
-## The six items
+**1. Invoices: multi-line items + a class/lead linkage picker.**
+The API has accepted `classId`/`leadId` since Phase 5 — the form just never
+exposed them. Now, for an outgoing invoice, two optional dropdowns (scoped to
+the chosen service) let you link the invoice to a real Class or Lead.
+Separately, "Break this down into line items…" reveals a description/qty/
+unit-amount row builder; `POST /api/invoices` computes the total as the sum
+of `quantity × unitAmount` server-side whenever line items are given —
+a client-sent flat `amount` alongside them is ignored, never trusted, so the
+two can never silently disagree. A flat amount with no line items still
+works exactly as before this phase; nothing about existing invoices changes.
 
-**1. Resolving a Blocker didn't touch its linked Task.**
-`PATCH /api/blockers/[id]` now checks, after resolving a blocker, whether that
-was the *last* open blocker on its linked task. If so, and the task is still
-in its initial `open` status, the task is automatically advanced to
-`in_progress`. The response carries `unblockedTaskId`/`unblockedTaskStatus`,
-and the Tasks page shows a one-line confirmation: `"<title>" had no blockers
-left, so it was moved to In progress automatically.`
+**2. Customers: a real create/edit path.**
+Previously the file header said this bluntly: "there's no direct
+create-a-customer form... Customer [is] the entity a Lead graduates into, not
+a separate intake." That framing left two real gaps — no way to add a
+walk-in customer who never went through Pipeline, and no way to fix a
+contact detail afterward. Both are closed now: `NewCustomerForm` (open
+creation, no service tie — a Customer isn't scoped to one service) and
+`CustomerItem`'s inline Edit toggle (`PATCH /api/customers/[id]`). Creating
+with an email that already exists returns the existing customer rather than
+a duplicate — reusing `findOrCreateCustomerByEmail`, the exact function lead
+admission has always used, so the two paths can never drift into two
+different dedupe rules.
 
-Design decision, stated plainly: this does not invent a new "blocked" task
-status. `lib/db-blockers.ts` already documents why Blockers exist as their own
-first-class entity instead of being inferred from task state — adding a
-"blocked" status would fight that design. The rule is narrow on purpose: it
-only fires on the *open → in_progress* transition. A task already
-`in_progress` or `done` is left alone (verified explicitly — see Testing
-below), and a task with multiple blockers only advances once every one of
-them is resolved.
+**3. Prospects: a staff "log an inquiry" form + a dedupe warning on promote.**
+`POST /api/prospects` lets staff log someone who called or emailed in,
+entering the same review queue as a public `/apply`/`/assess` submission,
+tagged with a new `'manual'` source (shown as "Staff-logged"). Separately,
+promoting a prospect to a lead now checks whether that email already matches
+an existing Customer or Lead, and surfaces what it found as a plain warning
+banner — deliberately *not* a block. This app has no merge/relate machinery,
+and a real person can legitimately come back for a second engagement (a
+returning customer, a lead who went cold and reapplied), so blocking would
+be the wrong call more often than not; the warning lets staff decide instead
+of the app guessing. Note the warning is shown once, right after promoting,
+in that browser session — it isn't persisted, so it won't reappear on a
+page reload (a documented scope choice, not a bug: the underlying fact,
+e.g. "already a customer," is still visible by checking Customers directly).
 
-**2. Classes could be marked "completed" with setup tasks still open.**
-`PATCH /api/classes/[id]` now rejects `{status: "completed"}` with a 400 and
-a message like `"Complete the setup checklist first — 3 tasks still open."`
-whenever any of the class's auto-generated setup tasks isn't `done`. The
-Classes page mirrors this client-side: the "Mark completed" button is
-genuinely `disabled` (not just visually discouraged) when tasks are open, with
-a tooltip and inline explanation.
+**4. Classes: a real enrollment/roster entity.**
+"Confirm enrolled candidate list" was, and still is, just a checklist line
+(`STANDARD_SETUP_TASKS` in `lib/db-classes.ts`) — that's left exactly as-is,
+since it's a real, separate to-do ("go confirm the list") and not the same
+thing as the list itself existing in the system. The new `class_enrollments`
+table is that list: each `ClassItem` card now has a Roster section — a
+picker (drawn from every Customer in the org, not filtered to this service's
+own engagements, since a first-time customer can be enrolled before any
+engagement record exists for them on this specific service), an enrolled
+list, and a Withdraw button per enrollment. Withdrawing and re-enrolling the
+same customer flips the same row back to `enrolled` rather than trying (and
+failing) to insert a second one — caught during smoke testing, see below.
 
-**3. Class completion never created an Invoice.**
-`invoices.class_id` existed since migration 0006 specifically for this and sat
-unused. Now, when a class is marked completed, the UI offers an opt-in
-checkbox ("Generate an outgoing invoice for this class when marked
-completed") with Customer / Amount / Due-date fields. If checked and filled
-in, the PATCH request includes an `invoice` payload and the API creates a
-real `invoices` row linked via `classId`.
-
-This follows the same discipline as every other money-related feature in this
-app (payroll rates, budget/invoice amounts): the amount is always
-staff-entered, never computed or invented. The feature is opt-in and off by
-default — not every completed class bills a customer immediately, or at all.
-
-**4. Service Requests were completely isolated.**
-Each `RequestItem` now checks on mount whether a task already exists for it
-(`GET /api/tasks?serviceRequestId=<id>`) and shows either a "Create task"
-button or a `→ Task created` link to the filtered Tasks view. Creating a task
-POSTs `{serviceId, serviceRequestId, title, description}` — the request's own
-title/description seed the task, and the link is stored via the new
-`tasks.service_request_id` column so a second click never creates a
-duplicate.
-
-**5. Service Health's `reasons[]` had no drill-down.**
-`ServiceHealth.reasons` changed from `string[]` to `{text: string; href:
-string | null}[]`. Reasons like "13 active items with nobody assigned" now
-link to `/tasks?service=<id>` (or `&focus=overdue` for the overdue-specific
-reason); the Capabilities Health tab and the Dashboard's at-risk list both
-render these as real links when `href` is present.
-
-Making the links land somewhere meaningful required adding service-scoped
-filtering to `TaskBoard` and `BudgetWorkspace` (`?service=<id>`, plus
-`&focus=overdue|blocked` on Tasks) — both pages now show a "Showing … for
-<service> — Clear filter" banner. One reason, "No provider assigned," keeps
-`href: null` on purpose: there's no service-detail page yet to link to. That's
-a known, documented gap, not an oversight.
-
-**6. Task `dependencies` were captured but never enforced.**
-
-Correction worth stating plainly: the backlog's own wording said dependencies
-were "captured at creation and rendered, but never enforced." On inspection
-that wasn't accurate — a full-project search showed `dependencies` was never
-accepted by `POST /api/tasks`, never settable from `NewTaskForm`, and never
-rendered by `TaskItem`. It existed only in the type/schema layer and was
-completely dead. So this item wasn't "add enforcement" — it was build the
-missing feature first, then enforce it:
-
-- `NewTaskForm` gained a "Depends on…" toggle revealing same-service tasks as
-  checkboxes.
-- `TaskItem` now shows a "Depends on: X ✓, Y ○" line and disables the
-  in-progress/done buttons (with a tooltip) while any dependency isn't done.
-- `PATCH /api/tasks/[id]` rejects an `in_progress`/`done` transition with a
-  400 (`"Blocked by 2 unfinished dependencies: X, Y"`) if any listed
-  dependency task isn't done yet.
-
-Known gap: the Kanban view's drag-to-change-status path doesn't surface this
-rejection the way the List view's buttons do (no tooltip, no inline error on
-a rejected drag). This is a pre-existing pattern in this app — Kanban has
-never surfaced List-view-style inline errors — not a regression introduced
-here, but it's worth knowing about if you rely on Kanban for tasks with
-dependencies.
+**5. Documents: an attachment link.**
+A plain URL field, not a file upload — this app has no storage backend wired
+up, and a link to wherever the file already lives (Drive, SharePoint, email)
+closes the actual gap without standing up new infrastructure for it, the
+same "URL field, not real storage" pattern `expenses.receiptUrl` already
+uses. Shown on `NewDocumentForm` and, when present, as an "Attachment" link
+on `DocumentItem`. One correction worth stating: the backlog also flagged
+"no visibility into approval status... invisible on the create form" as part
+of this gap — on inspection that wasn't accurate. `DocumentItem` has shown
+status badges (Draft/Pending approval/Approved/Rejected) since Phase 5; a
+brand-new document is always `draft` by definition, so there was never
+anything to show on the *create* form specifically. No code change was
+needed for that half — just the correction, stated here the same way Phase
+9's dependency-feature correction was.
 
 ## What was verified
 
 - `npx tsc --noEmit` — clean.
-- `npm run build` — clean; `/tasks` and `/budget` are still statically
-  prerendered (`○` in the route table) despite now reading
-  `useSearchParams()`, because both are wrapped in `<Suspense>` in
-  `app/tasks/page.tsx` / `app/budget/page.tsx` (same pattern as the Customers
-  page from the previous phase).
-- A 22-assertion Node.js API-level smoke test against a freshly reset local
-  SQLite database, covering all six items end-to-end, including negative
-  cases (an already-in-progress task is *not* touched by a later blocker
-  resolve; advancing a task with an unmet dependency is rejected; completing
-  a class with open tasks is rejected) — 22/22 passed.
-- Playwright screenshots at 1440px and 390px across Tasks (list + service
-  filter + overdue filter), Classes (gating + invoice form), Service
-  Requests, Capabilities → Health, Dashboard, and Budget (service filter) —
-  no horizontal overflow (`body.scrollWidth` matched the viewport exactly)
-  and every new UI element (filter banners, dependency chips, gating
-  messages, create-task/task-created states, reason links) rendered
-  correctly on both sizes.
+- `npm run build` — clean; every route table entry unchanged in shape
+  (no new page routes this phase, only API routes and component changes).
+- A 21-assertion Node.js API-level smoke test against a freshly reset local
+  SQLite database, covering all five items end-to-end, including negative
+  and edge cases: a client-sent flat `amount` is overridden by a real
+  line-item total; creating a customer with an existing email returns that
+  customer (not a duplicate) and an edit changes only the field sent; a
+  staff-logged prospect promotes with a dedupe warning when the email
+  matches an existing customer, and no warning when it's genuinely new;
+  double-enrolling a customer is rejected, and — the one issue the smoke
+  test caught before shipping — enrolling, withdrawing, then re-enrolling
+  the same customer originally failed against the unique index until
+  `enrollCustomer` was changed to flip an existing withdrawn row back to
+  `enrolled` instead of always inserting; and a document's `attachmentUrl`
+  round-trips correctly whether set or left blank. 21/21 passed after that
+  fix.
+- Playwright screenshots at 1440px and 390px across Budget → Invoices (list
+  with line items/class link, and the line-item builder expanded),
+  Customers (create form + inline edit mode), Prospects (staff-log form +
+  a promoted prospect), Classes (roster with an enrolled customer), and
+  Documents (attachment field on the form + a generated document showing
+  the Attachment link) — no horizontal overflow at either width
+  (`body.scrollWidth` matched the viewport exactly) and every new UI
+  element rendered correctly on both sizes.
 
 ## Applying this
 

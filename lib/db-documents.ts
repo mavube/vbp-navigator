@@ -29,6 +29,12 @@ export interface DocumentRow {
   sentAt: string | null;
   createdByName: string;
   approvedByName: string;
+  // v3.0 roadmap Phase 10 (Cluster C) — "no file/attachment upload." A
+  // plain link, not real file storage — this app has no storage backend
+  // wired up, and a link to wherever the file already lives (Drive,
+  // SharePoint, email) closes the actual gap without standing up new
+  // infrastructure for it. Same pattern as expenses.receiptUrl.
+  attachmentUrl: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -45,6 +51,7 @@ export interface NewDocument {
   recipientName: string;
   recipientEmail: string;
   createdByName: string;
+  attachmentUrl?: string;
   version?: number;
   previousVersionId?: string | null;
 }
@@ -55,7 +62,8 @@ function ensureSchema(): Promise<void> {
 
   if (!schemaReady) {
     schemaReady = (async () => {
-      (await getSqliteDb()).exec(`CREATE TABLE IF NOT EXISTS documents (
+      const db = await getSqliteDb();
+      db.exec(`CREATE TABLE IF NOT EXISTS documents (
         id TEXT PRIMARY KEY,
         org_id TEXT NOT NULL,
         service_id TEXT NOT NULL,
@@ -74,9 +82,17 @@ function ensureSchema(): Promise<void> {
         sent_at TEXT,
         created_by_name TEXT NOT NULL DEFAULT '',
         approved_by_name TEXT NOT NULL DEFAULT '',
+        attachment_url TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )`);
+      // attachment_url (Phase 10 of v3.0) was added after this table
+      // first shipped — same defensive-ALTER pattern as every other
+      // module.
+      const cols = db.prepare(`PRAGMA table_info(documents)`).all() as Array<{ name: string }>;
+      if (!cols.some((c) => c.name === "attachment_url")) {
+        db.exec(`ALTER TABLE documents ADD COLUMN attachment_url TEXT NOT NULL DEFAULT ''`);
+      }
     })();
   }
   return schemaReady;
@@ -101,6 +117,7 @@ function fromSqliteRow(row: Record<string, unknown>): DocumentRow {
     sentAt: (row.sent_at as string) ?? null,
     createdByName: row.created_by_name as string,
     approvedByName: row.approved_by_name as string,
+    attachmentUrl: (row.attachment_url as string) ?? "",
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
@@ -111,6 +128,7 @@ const PG_COLS = `id, service_id AS "serviceId", lead_id AS "leadId", engagement_
                     recipient_name AS "recipientName", recipient_email AS "recipientEmail", status, version,
                     previous_version_id AS "previousVersionId", sent_at AS "sentAt",
                     created_by_name AS "createdByName", approved_by_name AS "approvedByName",
+                    attachment_url AS "attachmentUrl",
                     created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 export async function listDocuments(orgId: string): Promise<DocumentRow[]> {
@@ -144,31 +162,32 @@ export async function createDocument(orgId: string, input: NewDocument): Promise
   const leadId = input.leadId ?? null;
   const engagementId = input.engagementId ?? null;
   const customerId = input.customerId ?? null;
+  const attachmentUrl = input.attachmentUrl ?? "";
 
   if (IS_POSTGRES) {
     await (await getPgPool()).query(
       `INSERT INTO documents (id, org_id, service_id, lead_id, engagement_id, customer_id, doc_type, title, body, details,
-                               recipient_name, recipient_email, status, version, previous_version_id, created_by_name, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'draft',$13,$14,$15,$16,$16)`,
+                               recipient_name, recipient_email, status, version, previous_version_id, created_by_name, attachment_url, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'draft',$13,$14,$15,$16,$17,$17)`,
       [id, orgId, input.serviceId, leadId, engagementId, customerId, input.docType, input.title, input.body, input.details,
-       input.recipientName, input.recipientEmail, version, previousVersionId, input.createdByName, now]
+       input.recipientName, input.recipientEmail, version, previousVersionId, input.createdByName, attachmentUrl, now]
     );
   } else {
     (await getSqliteDb())
       .prepare(
         `INSERT INTO documents (id, org_id, service_id, lead_id, engagement_id, customer_id, doc_type, title, body, details,
-                                 recipient_name, recipient_email, status, version, previous_version_id, created_by_name, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'draft',?,?,?,?,?)`
+                                 recipient_name, recipient_email, status, version, previous_version_id, created_by_name, attachment_url, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'draft',?,?,?,?,?,?)`
       )
       .run(id, orgId, input.serviceId, leadId, engagementId, customerId, input.docType, input.title, input.body, input.details,
-           input.recipientName, input.recipientEmail, version, previousVersionId, input.createdByName, now, now);
+           input.recipientName, input.recipientEmail, version, previousVersionId, input.createdByName, attachmentUrl, now, now);
   }
 
   return {
     id, serviceId: input.serviceId, leadId, engagementId, customerId, docType: input.docType, title: input.title,
     body: input.body, details: input.details, recipientName: input.recipientName, recipientEmail: input.recipientEmail,
     status: "draft", version, previousVersionId, sentAt: null, createdByName: input.createdByName, approvedByName: "",
-    createdAt: now, updatedAt: now,
+    attachmentUrl, createdAt: now, updatedAt: now,
   };
 }
 

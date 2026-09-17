@@ -7,9 +7,14 @@
 
 import { randomUUID } from "node:crypto";
 import { IS_POSTGRES, getPgPool, getSqliteDb } from "@/lib/db-driver";
-import { createLead } from "@/lib/db-leads";
+import { createLead, findLeadByEmail } from "@/lib/db-leads";
+import { findCustomerByEmail } from "@/lib/db-customers";
 
-export type ProspectSource = "apply" | "assessment";
+// v3.0 roadmap Phase 10 (Cluster C) added 'manual' — a prospect staff
+// logged directly (app/api/prospects/route.ts's POST) rather than one
+// who came in through the public /apply or /assess forms. Same table,
+// same review queue, same promote-to-lead path as the other two.
+export type ProspectSource = "apply" | "assessment" | "manual";
 export type ProspectStatus = "new" | "reviewed" | "promoted" | "declined";
 
 export interface ProspectRow {
@@ -175,9 +180,29 @@ export async function updateProspectStatus(orgId: string, id: string, status: Pr
 // serviceId must be resolved by the caller (the prospect's own
 // serviceId if it picked one on /apply or /assess, or one chosen by
 // staff during review if it didn't).
+//
+// v3.0 roadmap Phase 10 (Cluster C) — "promoting a prospect to a lead
+// doesn't check for an existing customer/lead with the same email."
+// Deliberately a warning, not a block: a real person can legitimately
+// come back for a second engagement (a returning customer, a lead who
+// went cold and re-applied), and this app has no merge/relate machinery
+// to make blocking the right call — so the check surfaces what it
+// found and lets staff decide, the same "inform, don't silently guess"
+// discipline as the Service Health drill-down reasons.
 export async function promoteProspectToLead(orgId: string, id: string, serviceId: string) {
   const prospect = await getProspect(orgId, id);
   if (!prospect) throw new Error("Prospect not found");
+
+  let duplicateWarning: string | null = null;
+  if (prospect.email) {
+    const existingCustomer = await findCustomerByEmail(orgId, prospect.email);
+    const existingLead = await findLeadByEmail(orgId, prospect.email);
+    if (existingCustomer) {
+      duplicateWarning = `${prospect.email} is already a customer (${existingCustomer.fullName}) — check before treating this as a new relationship.`;
+    } else if (existingLead) {
+      duplicateWarning = `${prospect.email} already has a lead on file (${existingLead.stage} stage) — check before following up twice.`;
+    }
+  }
 
   const lead = await createLead(orgId, {
     serviceId,
@@ -188,7 +213,7 @@ export async function promoteProspectToLead(orgId: string, id: string, serviceId
   });
 
   await updateProspectStatus(orgId, id, "promoted", lead.id);
-  return lead;
+  return { lead, duplicateWarning };
 }
 
 // Exported so lib/rollups.ts (or any future cross-module reporting)

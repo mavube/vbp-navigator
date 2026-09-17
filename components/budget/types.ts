@@ -37,12 +37,33 @@ export interface Expense {
   receiptUrl: string;
 }
 
+export interface InvoiceLineItem {
+  description: string;
+  quantity: number;
+  unitAmount: number;
+}
+
 export interface Invoice {
   id: string;
   serviceId: string;
+  classId: string | null;
+  leadId: string | null;
   direction: InvoiceDirection;
   party: string;
   amount: number;
+  lineItems: InvoiceLineItem[];
   dueDate: string | null;
   status: InvoiceStatus;
+}
+
+export interface ClassOption {
+  id: string;
+  serviceId: string;
+  title: string;
+}
+
+export interface LeadOption {
+  id: string;
+  serviceId: string;
+  contactName: string;
 }

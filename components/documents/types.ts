@@ -52,5 +52,6 @@ export interface DocumentRecord {
   sentAt: string | null;
   createdByName: string;
   approvedByName: string;
+  attachmentUrl: string;
   createdAt: string;
 }

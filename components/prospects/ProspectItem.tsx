@@ -36,6 +36,12 @@ export function ProspectItem({
   const [pendingAction, setPendingAction] = useState<ProspectAction | null>(null);
   const busy = pendingAction !== null;
   const [error, setError] = useState("");
+  // v3.0 roadmap Phase 10 (Cluster C) — the non-blocking dedupe check
+  // on promote (lib/db-prospects.ts's promoteProspectToLead) surfaces
+  // here rather than in a dismissible toast, since staff need to still
+  // see it after the promote button disappears (the prospect moves to
+  // "Closed").
+  const [duplicateWarning, setDuplicateWarning] = useState("");
 
   const cvsServices = services.filter((s) => s.type === "cvs");
 
@@ -75,6 +81,7 @@ export function ProspectItem({
       if (res.ok) {
         const body = await res.json();
         onChange({ status: "promoted", leadId: body.leadId, serviceId });
+        if (body.duplicateWarning) setDuplicateWarning(body.duplicateWarning);
       } else {
         const body = await res.json().catch(() => ({}));
         setError(body.error || "Couldn't promote");
@@ -97,10 +104,18 @@ export function ProspectItem({
           </div>
         </div>
         <div style={{ display: "flex", gap: "var(--v2-space-2)", alignItems: "center" }}>
-          <Badge tone="neutral">{prospect.source === "assessment" ? "Assessment" : "Application"}</Badge>
+          <Badge tone="neutral">
+            {prospect.source === "assessment" ? "Assessment" : prospect.source === "manual" ? "Staff-logged" : "Application"}
+          </Badge>
           <Badge tone={STATUS_TONE[prospect.status]}>{STATUS_LABEL[prospect.status]}</Badge>
         </div>
       </div>
+
+      {duplicateWarning && (
+        <p style={{ color: "var(--v2-warning, #B45309)", fontSize: "0.8rem", margin: "var(--v2-space-2) 0 0" }}>
+          ⚠ {duplicateWarning}
+        </p>
+      )}
 
       {prospect.message && (
         <p style={{ fontSize: "0.85rem", color: "var(--v2-text-muted)", margin: "var(--v2-space-2) 0 0" }}>{prospect.message}</p>

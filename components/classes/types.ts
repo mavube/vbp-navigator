@@ -24,3 +24,17 @@ export interface SetupTask {
   title: string;
   status: SetupTaskStatus;
 }
+
+export type EnrollmentStatus = "enrolled" | "waitlisted" | "withdrawn";
+
+export interface Enrollment {
+  id: string;
+  classId: string;
+  customerId: string;
+  status: EnrollmentStatus;
+}
+
+export interface CustomerOption {
+  id: string;
+  fullName: string;
+}

@@ -66,6 +66,10 @@ export async function POST(req: NextRequest) {
   // as before this change.
   const recipientNameOverride = typeof body.recipientName === "string" ? body.recipientName.trim() : "";
   const recipientEmailOverride = typeof body.recipientEmail === "string" ? body.recipientEmail.trim() : "";
+  // v3.0 roadmap Phase 10 (Cluster C) — an optional link to wherever the
+  // actual file already lives (see lib/db-documents.ts's comment on
+  // DocumentRow.attachmentUrl for why this is a link, not an upload).
+  const attachmentUrl = typeof body.attachmentUrl === "string" ? body.attachmentUrl.trim().slice(0, 2000) : "";
 
   const rendered = renderDocument(docType, {
     ...anchor.context,
@@ -86,6 +90,7 @@ export async function POST(req: NextRequest) {
     recipientName: recipientNameOverride || anchor.context.recipientName,
     recipientEmail: recipientEmailOverride || anchor.recipientEmail,
     createdByName,
+    attachmentUrl,
   });
   return NextResponse.json(doc, { status: 201 });
 }

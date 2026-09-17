@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
 import { CommentThread } from "@/components/collaboration/CommentThread";
-import type { Class, ClassStatus, SetupTask, SetupTaskStatus } from "@/components/classes/types";
+import type { Class, ClassStatus, SetupTask, SetupTaskStatus, Enrollment, CustomerOption } from "@/components/classes/types";
 
 const STATUS_ORDER: ClassStatus[] = ["scheduled", "in_progress", "completed"];
 const STATUS_TONE: Record<ClassStatus, "neutral" | "accent" | "success" | "danger"> = {
@@ -48,12 +48,77 @@ export function ClassItem({
   const [invoiceDueDate, setInvoiceDueDate] = useState("");
   const [invoiceCreated, setInvoiceCreated] = useState(false);
 
+  // v3.0 roadmap Phase 10 (Cluster C) — the real roster behind "confirm
+  // enrolled candidate list" (still just a checklist line above, left
+  // as-is — see the migration's comment for why that's a deliberate,
+  // separate thing). Picker is drawn from every Customer in the org,
+  // not filtered to this service's own engagements — a first-time
+  // customer can be enrolled before any engagement record exists for
+  // them on this specific service.
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [rosterLoading, setRosterLoading] = useState(true);
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [enrolling, setEnrolling] = useState(false);
+  const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
+  const [rosterError, setRosterError] = useState("");
+
   useEffect(() => {
     fetch(`/api/tasks?classId=${cls.id}`, { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : []))
       .then((data: SetupTask[]) => setTasks(data))
       .finally(() => setTasksLoading(false));
+
+    Promise.all([
+      fetch(`/api/classes/${cls.id}/enrollments`, { cache: "no-store" }).then((res) => (res.ok ? res.json() : [])),
+      fetch("/api/customers", { cache: "no-store" }).then((res) => (res.ok ? res.json() : { customers: [] })),
+    ])
+      .then(([enrollmentsData, customersData]) => {
+        setEnrollments(enrollmentsData);
+        setCustomers(customersData.customers ?? []);
+      })
+      .finally(() => setRosterLoading(false));
   }, [cls.id]);
+
+  async function enroll() {
+    if (!selectedCustomerId) return;
+    setEnrolling(true);
+    setRosterError("");
+    try {
+      const res = await fetch(`/api/classes/${cls.id}/enrollments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerId: selectedCustomerId }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Couldn't enroll customer");
+      }
+      const enrollment: Enrollment = await res.json();
+      setEnrollments((prev) => [...prev, enrollment]);
+      setSelectedCustomerId("");
+    } catch (err) {
+      setRosterError(err instanceof Error ? err.message : "Couldn't enroll customer");
+    } finally {
+      setEnrolling(false);
+    }
+  }
+
+  async function withdraw(enrollmentId: string) {
+    setWithdrawingId(enrollmentId);
+    try {
+      const res = await fetch(`/api/classes/${cls.id}/enrollments/${enrollmentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "withdrawn" }),
+      });
+      if (res.ok) {
+        setEnrollments((prev) => prev.map((e) => (e.id === enrollmentId ? { ...e, status: "withdrawn" } : e)));
+      }
+    } finally {
+      setWithdrawingId(null);
+    }
+  }
 
   async function setClassStatus(status: ClassStatus) {
     setError("");
@@ -209,6 +274,67 @@ export function ClassItem({
               </label>
             ))}
           </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: "var(--v2-space-3)", borderTop: "1px solid var(--v2-border)", paddingTop: "var(--v2-space-3)" }}>
+        <div style={{ fontSize: "0.75rem", color: "var(--v2-text-faint)", marginBottom: "var(--v2-space-2)" }}>
+          Roster {rosterLoading ? "" : `(${enrollments.filter((e) => e.status !== "withdrawn").length} enrolled)`}
+        </div>
+        {rosterLoading ? (
+          <p style={{ fontSize: "0.8rem", color: "var(--v2-text-muted)", margin: 0 }}>Loading…</p>
+        ) : (
+          <>
+            {enrollments.filter((e) => e.status !== "withdrawn").length === 0 ? (
+              <p style={{ fontSize: "0.8rem", color: "var(--v2-text-muted)", margin: "0 0 var(--v2-space-2)" }}>Nobody enrolled yet.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "var(--v2-space-2)" }}>
+                {enrollments.filter((e) => e.status !== "withdrawn").map((e) => (
+                  <div key={e.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "0.85rem" }}>
+                    <span>
+                      {customers.find((c) => c.id === e.customerId)?.fullName ?? "Unknown customer"}
+                      {e.status === "waitlisted" ? " (waitlisted)" : ""}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => withdraw(e.id)}
+                      disabled={withdrawingId !== null}
+                      className={`v2-btn v2-btn-secondary ${withdrawingId === e.id ? "v2-btn-busy" : ""}`}
+                      style={{ padding: "2px 8px", fontSize: "0.72rem" }}
+                    >
+                      {withdrawingId === e.id && <Spinner size={10} />}
+                      {withdrawingId === e.id ? "Withdrawing…" : "Withdraw"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {customers.length === 0 ? (
+              <p style={{ fontSize: "0.78rem", color: "var(--v2-text-faint)", margin: 0 }}>No customers on file yet to enroll.</p>
+            ) : (
+              <div style={{ display: "flex", gap: "var(--v2-space-2)", alignItems: "center", flexWrap: "wrap" }}>
+                <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)} className="v2-input" style={{ maxWidth: 220 }}>
+                  <option value="">Enroll a customer…</option>
+                  {customers
+                    .filter((c) => !enrollments.some((e) => e.customerId === c.id && e.status !== "withdrawn"))
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>{c.fullName}</option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={enroll}
+                  disabled={!selectedCustomerId || enrolling}
+                  className={`v2-btn v2-btn-secondary ${enrolling ? "v2-btn-busy" : ""}`}
+                  style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+                >
+                  {enrolling && <Spinner size={11} />}
+                  {enrolling ? "Enrolling…" : "Enroll"}
+                </button>
+              </div>
+            )}
+            {rosterError && <p style={{ color: "var(--v2-danger)", fontSize: "0.8rem", margin: "8px 0 0" }}>{rosterError}</p>}
+          </>
         )}
       </div>
 

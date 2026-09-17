@@ -28,6 +28,7 @@ export function NewDocumentForm({
   const [recipientName, setRecipientName] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [showRecipientOverride, setShowRecipientOverride] = useState(false);
+  const [attachmentUrl, setAttachmentUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -55,6 +56,7 @@ export function NewDocumentForm({
           details,
           recipientName: recipientName || undefined,
           recipientEmail: recipientEmail || undefined,
+          attachmentUrl: attachmentUrl || undefined,
         }),
       });
       if (!res.ok) {
@@ -69,6 +71,7 @@ export function NewDocumentForm({
       setRecipientName("");
       setRecipientEmail("");
       setShowRecipientOverride(false);
+      setAttachmentUrl("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't generate document");
     } finally {
@@ -127,6 +130,18 @@ export function NewDocumentForm({
         placeholder={isPreAdmission ? "Details specific to this document (price, date, justification…)" : "Details specific to this document (optional)"}
         value={details}
         onChange={(e) => setDetails(e.target.value)}
+      />
+
+      {/* v3.0 roadmap Phase 10 (Cluster C) — a link to a supporting file
+          (a signed copy, a scanned attachment) that lives wherever it
+          already does — Drive, SharePoint, email — not an upload into
+          this app. Same "URL field, not real storage" pattern as an
+          Expense's receipt link. */}
+      <Input
+        type="url"
+        placeholder="Attachment link (optional)"
+        value={attachmentUrl}
+        onChange={(e) => setAttachmentUrl(e.target.value)}
       />
 
       {/* Quick win: recipient name/email are otherwise always derived

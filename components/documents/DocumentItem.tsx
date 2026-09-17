@@ -75,6 +75,14 @@ export function DocumentItem({ doc, onChange }: { doc: DocumentRecord; onChange:
             {doc.recipientName}
             {doc.recipientEmail ? ` · ${doc.recipientEmail}` : ""} · v{doc.version}
             {doc.sentAt ? " · Sent" : ""}
+            {doc.attachmentUrl && (
+              <>
+                {" · "}
+                <a href={doc.attachmentUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--v2-accent)" }}>
+                  Attachment
+                </a>
+              </>
+            )}
           </div>
         </div>
         <div style={{ display: "flex", gap: "var(--v2-space-2)", alignItems: "center" }}>

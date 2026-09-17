@@ -1,4 +1,4 @@
-export type ProspectSource = "apply" | "assessment";
+export type ProspectSource = "apply" | "assessment" | "manual";
 export type ProspectStatus = "new" | "reviewed" | "promoted" | "declined";
 
 export interface ServiceOption {

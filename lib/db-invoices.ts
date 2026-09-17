@@ -10,6 +10,19 @@ import { IS_POSTGRES, getPgPool, getSqliteDb } from "@/lib/db-driver";
 export type InvoiceDirection = "incoming" | "outgoing";
 export type InvoiceStatus = "unpaid" | "paid" | "overdue";
 
+// v3.0 roadmap Phase 10 (Cluster C) — optional structured line items.
+// Kept as a bounded array owned by the invoice row itself (same pattern
+// as tasks.dependencies / prospects.assessmentAnswers), not a separate
+// table with its own join/permission surface. `amount` stays the
+// single source of truth for what's owed — when line items are given,
+// the API computes it as their sum rather than trusting a client total;
+// see app/api/invoices/route.ts.
+export interface InvoiceLineItem {
+  description: string;
+  quantity: number;
+  unitAmount: number;
+}
+
 export interface InvoiceRow {
   id: string;
   serviceId: string;
@@ -19,6 +32,7 @@ export interface InvoiceRow {
   direction: InvoiceDirection;
   party: string;
   amount: number;
+  lineItems: InvoiceLineItem[];
   dueDate: string | null;
   status: InvoiceStatus;
   createdAt: string;
@@ -33,6 +47,7 @@ export interface NewInvoice {
   direction: InvoiceDirection;
   party: string;
   amount: number;
+  lineItems?: InvoiceLineItem[];
   dueDate?: string | null;
 }
 
@@ -42,7 +57,8 @@ function ensureSchema(): Promise<void> {
 
   if (!schemaReady) {
     schemaReady = (async () => {
-      (await getSqliteDb()).exec(`CREATE TABLE IF NOT EXISTS invoices (
+      const db = await getSqliteDb();
+      db.exec(`CREATE TABLE IF NOT EXISTS invoices (
         id TEXT PRIMARY KEY,
         org_id TEXT NOT NULL,
         service_id TEXT NOT NULL,
@@ -52,11 +68,18 @@ function ensureSchema(): Promise<void> {
         direction TEXT NOT NULL,
         party TEXT NOT NULL,
         amount REAL NOT NULL,
+        line_items TEXT NOT NULL DEFAULT '[]',
         due_date TEXT,
         status TEXT NOT NULL DEFAULT 'unpaid',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )`);
+      // line_items (Phase 10 of v3.0) was added after this table first
+      // shipped — same defensive-ALTER pattern as every other module.
+      const cols = db.prepare(`PRAGMA table_info(invoices)`).all() as Array<{ name: string }>;
+      if (!cols.some((c) => c.name === "line_items")) {
+        db.exec(`ALTER TABLE invoices ADD COLUMN line_items TEXT NOT NULL DEFAULT '[]'`);
+      }
     })();
   }
   return schemaReady;
@@ -80,6 +103,7 @@ function fromSqliteRow(row: Record<string, unknown>): InvoiceRow {
     direction: row.direction as InvoiceDirection,
     party: row.party as string,
     amount: row.amount as number,
+    lineItems: JSON.parse((row.line_items as string) || "[]"),
     dueDate: (row.due_date as string) ?? null,
     status: row.status as InvoiceStatus,
     createdAt: row.created_at as string,
@@ -90,7 +114,7 @@ function fromSqliteRow(row: Record<string, unknown>): InvoiceRow {
 export async function listInvoices(orgId: string, serviceId?: string, direction?: InvoiceDirection): Promise<InvoiceRow[]> {
   await ensureSchema();
   const cols = `id, service_id AS "serviceId", expense_id AS "expenseId", class_id AS "classId", lead_id AS "leadId",
-                  direction, party, amount, due_date AS "dueDate", status,
+                  direction, party, amount, line_items AS "lineItems", due_date AS "dueDate", status,
                   created_at AS "createdAt", updated_at AS "updatedAt"`;
   const conditions: string[] = ["org_id = $1"];
   const params: unknown[] = [orgId];
@@ -134,20 +158,22 @@ export async function createInvoice(orgId: string, input: NewInvoice): Promise<I
   const classId = input.classId ?? null;
   const leadId = input.leadId ?? null;
   const dueDate = input.dueDate ?? null;
+  const lineItems = input.lineItems ?? [];
+  const lineItemsJson = JSON.stringify(lineItems);
 
   if (IS_POSTGRES) {
     await (await getPgPool()).query(
-      `INSERT INTO invoices (id, org_id, service_id, expense_id, class_id, lead_id, direction, party, amount, due_date, status, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'unpaid',$11,$11)`,
-      [id, orgId, input.serviceId, expenseId, classId, leadId, input.direction, input.party, input.amount, dueDate, now]
+      `INSERT INTO invoices (id, org_id, service_id, expense_id, class_id, lead_id, direction, party, amount, line_items, due_date, status, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'unpaid',$12,$12)`,
+      [id, orgId, input.serviceId, expenseId, classId, leadId, input.direction, input.party, input.amount, lineItemsJson, dueDate, now]
     );
   } else {
     (await getSqliteDb())
       .prepare(
-        `INSERT INTO invoices (id, org_id, service_id, expense_id, class_id, lead_id, direction, party, amount, due_date, status, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,'unpaid',?,?)`
+        `INSERT INTO invoices (id, org_id, service_id, expense_id, class_id, lead_id, direction, party, amount, line_items, due_date, status, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,'unpaid',?,?)`
       )
-      .run(id, orgId, input.serviceId, expenseId, classId, leadId, input.direction, input.party, input.amount, dueDate, now, now);
+      .run(id, orgId, input.serviceId, expenseId, classId, leadId, input.direction, input.party, input.amount, lineItemsJson, dueDate, now, now);
   }
 
   return {
@@ -159,6 +185,7 @@ export async function createInvoice(orgId: string, input: NewInvoice): Promise<I
     direction: input.direction,
     party: input.party,
     amount: input.amount,
+    lineItems,
     dueDate,
     status: "unpaid",
     createdAt: now,
