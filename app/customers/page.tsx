@@ -6,7 +6,7 @@ export default function CustomersPage() {
   return (
     <Page
       title="Customers"
-      description="Real customer relationships, each holding one or more Engagements — a customer's actual journey through a specific service, created automatically the moment a lead is admitted."
+      description="Real customer relationships, each holding one or more Engagements — a customer's actual journey through a specific service, created automatically the moment a lead is won."
     >
       {/* CustomersWorkspace reads ?highlight= via useSearchParams (the
           Pipeline admission deep-link) — Next.js requires a Suspense

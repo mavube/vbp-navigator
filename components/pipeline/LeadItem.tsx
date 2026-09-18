@@ -8,19 +8,19 @@ import { Spinner } from "@/components/ui/Spinner";
 import { CommentThread } from "@/components/collaboration/CommentThread";
 import type { Lead, LeadStage } from "@/components/pipeline/types";
 
-const STAGE_ORDER: LeadStage[] = ["new", "contacted", "assessed", "admitted"];
+const STAGE_ORDER: LeadStage[] = ["new", "contacted", "qualified", "won"];
 const STAGE_TONE: Record<LeadStage, "neutral" | "accent" | "success" | "danger"> = {
   new: "neutral",
   contacted: "accent",
-  assessed: "accent",
-  admitted: "success",
+  qualified: "accent",
+  won: "success",
   lost: "danger",
 };
 const STAGE_LABEL: Record<LeadStage, string> = {
   new: "New",
   contacted: "Contacted",
-  assessed: "Assessed",
-  admitted: "Admitted",
+  qualified: "Qualified",
+  won: "Won",
   lost: "Lost",
 };
 
@@ -37,7 +37,7 @@ export function LeadItem({
 }) {
   const [error, setError] = useState("");
   const [pendingStage, setPendingStage] = useState<LeadStage | null>(null);
-  const [admittedCustomerId, setAdmittedCustomerId] = useState<string | null>(null);
+  const [wonCustomerId, setWonCustomerId] = useState<string | null>(null);
 
   async function setStage(stage: LeadStage) {
     setError("");
@@ -50,7 +50,7 @@ export function LeadItem({
       });
       if (res.ok) {
         const body: { customerId?: string | null } = await res.json().catch(() => ({}));
-        if (body.customerId) setAdmittedCustomerId(body.customerId);
+        if (body.customerId) setWonCustomerId(body.customerId);
         onStageChange(stage);
       } else {
         const body = await res.json().catch(() => ({}));
@@ -98,7 +98,7 @@ export function LeadItem({
               {pendingStage === nextStage ? "Marking…" : `Mark ${STAGE_LABEL[nextStage].toLowerCase()}`}
             </button>
           )}
-          {lead.stage !== "lost" && lead.stage !== "admitted" && (
+          {lead.stage !== "lost" && lead.stage !== "won" && (
             <button
               type="button"
               onClick={() => setStage("lost")}
@@ -114,20 +114,19 @@ export function LeadItem({
       </div>
       {error && <p style={{ color: "var(--v2-danger)", fontSize: "0.8rem", margin: "8px 0 0" }}>{error}</p>}
 
-      {/* v3.0 Phase 4: admitting a lead also creates a Customer +
+      {/* v3.0 Phase 4: winning a lead also creates a Customer +
           Engagement (app/api/leads/[id]/route.ts), which returns the
           new customerId. Deep-links to /customers?highlight=<id>
           (CustomersWorkspace scrolls to and highlights that card) when
-          this component was the one that just performed the admission
-          — admittedCustomerId only lives in this component's local
-          state, so a lead that was already admitted before this page
-          load falls back to the plain list link rather than a stale
-          or guessed id. */}
-      {lead.stage === "admitted" && (
+          this component was the one that just marked the lead won —
+          wonCustomerId only lives in this component's local state, so
+          a lead that was already won before this page load falls back
+          to the plain list link rather than a stale or guessed id. */}
+      {lead.stage === "won" && (
         <p style={{ fontSize: "0.75rem", color: "var(--v2-text-faint)", margin: "8px 0 0" }}>
           → Customer record created — see{" "}
           <Link
-            href={admittedCustomerId ? `/customers?highlight=${admittedCustomerId}` : "/customers"}
+            href={wonCustomerId ? `/customers?highlight=${wonCustomerId}` : "/customers"}
             style={{ color: "var(--v2-accent)" }}
           >
             Customers

@@ -3,8 +3,9 @@
 // Engagement is a Customer's actual journey through one Service — the
 // first real, distinct entity for the brief's own
 // Customer -> Situation -> Service -> Engagement -> Outcome chain (§2-3).
-// Created only by admitLead below (called from app/api/leads/[id]/
-// route.ts when a lead's stage becomes 'admitted'), never directly.
+// Created only by convertLead below (called from app/api/leads/[id]/
+// route.ts when a lead's stage becomes 'won' — named admitLead before
+// Phase D's generic-pipeline-vocabulary correction), never directly.
 
 import { randomUUID } from "node:crypto";
 import { IS_POSTGRES, getPgPool, getSqliteDb } from "@/lib/db-driver";
@@ -149,13 +150,15 @@ export async function updateEngagementStatus(orgId: string, id: string, status: 
   }
 }
 
-// The admission-conversion step itself — called from app/api/leads/
-// [id]/route.ts right after a lead's stage is set to 'admitted'. Finds
-// or creates the Customer (by email) and opens a new Engagement for
-// this lead's service. Returns null if the lead doesn't exist (the
-// caller has already validated this before calling updateLeadStage, so
-// that shouldn't happen in practice — defensive, not expected).
-export async function admitLead(orgId: string, leadId: string): Promise<{ customer: CustomerRow; engagement: EngagementRow } | null> {
+// The lead-to-customer conversion step itself — called from
+// app/api/leads/[id]/route.ts right after a lead's stage is set to
+// 'won' (formerly 'admitted' — see LeadStage in lib/db-leads.ts for
+// the Phase D rename). Finds or creates the Customer (by email) and
+// opens a new Engagement for this lead's service. Returns null if the
+// lead doesn't exist (the caller has already validated this before
+// calling updateLeadStage, so that shouldn't happen in practice —
+// defensive, not expected).
+export async function convertLead(orgId: string, leadId: string): Promise<{ customer: CustomerRow; engagement: EngagementRow } | null> {
   const lead: LeadRow | null = await getLead(orgId, leadId);
   if (!lead) return null;
 

@@ -3,7 +3,7 @@
 // actual template rendering lives in lib/document-templates.ts and the
 // cross-module data gathering (service/lead/customer/engagement) lives
 // in the API routes that call this, same division of responsibility as
-// lib/db-engagements.ts's admitLead vs. the leads route that triggers it.
+// lib/db-engagements.ts's convertLead vs. the leads route that triggers it.
 
 import { randomUUID } from "node:crypto";
 import { IS_POSTGRES, getPgPool, getSqliteDb } from "@/lib/db-driver";

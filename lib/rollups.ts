@@ -66,7 +66,7 @@ export interface ServiceRollup {
   requestsOpen: number;
   requestsResolved: number;
   leadsActive: number;
-  leadsAdmitted: number;
+  leadsWon: number;
   classesActive: number;
   classesCompleted: number;
   budgetPendingAmount: number;
@@ -119,7 +119,7 @@ function emptyRollup(serviceId: string): ServiceRollup {
     requestsOpen: 0,
     requestsResolved: 0,
     leadsActive: 0,
-    leadsAdmitted: 0,
+    leadsWon: 0,
     classesActive: 0,
     classesCompleted: 0,
     budgetPendingAmount: 0,
@@ -208,13 +208,13 @@ export async function getServiceRollups(orgId: string, fiscalYear?: number): Pro
   }
 
   const leads = await groupedQuery([orgId], {
-    pg: `SELECT service_id, SUM(CASE WHEN stage IN ('new','contacted','assessed') THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN stage = 'admitted' THEN 1 ELSE 0 END) AS admitted FROM leads WHERE org_id = $1 GROUP BY service_id`,
-    sqlite: `SELECT service_id, SUM(CASE WHEN stage IN ('new','contacted','assessed') THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN stage = 'admitted' THEN 1 ELSE 0 END) AS admitted FROM leads WHERE org_id = ? GROUP BY service_id`,
+    pg: `SELECT service_id, SUM(CASE WHEN stage IN ('new','contacted','qualified') THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN stage = 'won' THEN 1 ELSE 0 END) AS won FROM leads WHERE org_id = $1 GROUP BY service_id`,
+    sqlite: `SELECT service_id, SUM(CASE WHEN stage IN ('new','contacted','qualified') THEN 1 ELSE 0 END) AS active, SUM(CASE WHEN stage = 'won' THEN 1 ELSE 0 END) AS won FROM leads WHERE org_id = ? GROUP BY service_id`,
   });
   for (const row of leads) {
     const r = get(row.service_id as string);
     r.leadsActive = Number(row.active) || 0;
-    r.leadsAdmitted = Number(row.admitted) || 0;
+    r.leadsWon = Number(row.won) || 0;
   }
 
   const classes = await groupedQuery([orgId], {

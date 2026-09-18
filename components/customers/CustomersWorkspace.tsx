@@ -68,7 +68,7 @@ export function CustomersWorkspace() {
       {customers.length === 0 ? (
         <p style={{ color: "var(--v2-text-muted)" }}>
           No customers yet — add one above, or a record is created automatically the first time a lead on Pipeline
-          is marked admitted.
+          is marked won.
         </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-3)" }}>

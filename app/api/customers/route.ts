@@ -5,7 +5,7 @@ import { getCurrentOrgId } from "@/lib/current-org";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/customers — every customer this org has, each admitted from
+// GET /api/customers — every customer this org has, each won from
 // a Lead (see app/api/leads/[id]/route.ts) or added directly (Phase 10
 // below), plus every Engagement (customer + service pairing) so the
 // client can join them without a second round trip — same "small org,

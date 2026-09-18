@@ -51,8 +51,8 @@ export function PipelineBoard() {
   if (loading) return <p style={{ color: "var(--v2-text-muted)" }}>Loading…</p>;
   if (error) return <p style={{ color: "var(--v2-danger)" }}>{error}</p>;
 
-  const active = leads.filter((l) => l.stage !== "admitted" && l.stage !== "lost");
-  const closed = leads.filter((l) => l.stage === "admitted" || l.stage === "lost");
+  const active = leads.filter((l) => l.stage !== "won" && l.stage !== "lost");
+  const closed = leads.filter((l) => l.stage === "won" || l.stage === "lost");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-6)" }}>

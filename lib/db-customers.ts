@@ -1,6 +1,6 @@
 // Data layer for the `customers` table — schema in
 // supabase/migrations/0012_phase4_customer_engagement.sql. Originally
-// populated only by lib/db-engagements.ts's admitLead (the "prospect
+// populated only by lib/db-engagements.ts's convertLead (the "prospect
 // converts into a full customer record on admission" behavior); v3.0
 // roadmap Phase 10 (Cluster C) added a direct create/edit path
 // (app/api/customers/route.ts, app/api/customers/[id]/route.ts) for the
@@ -151,7 +151,7 @@ export async function createCustomer(orgId: string, input: NewCustomer): Promise
 
 // The heart of "converts into a full customer record on admission" —
 // reuses an existing customer (matched by email within the org) rather
-// than creating a duplicate every time the same person is admitted into
+// than creating a duplicate every time the same person is won into
 // a second service down the line. A blank email can't be de-duplicated
 // (there's no other reliable identifier on file), so those always
 // create a new customer row — a known, documented limitation, not a
@@ -177,7 +177,7 @@ export async function findOrCreateCustomerByEmailWithFlag(
 }
 
 // v3.0 roadmap Phase 10 (Cluster C) — the one other gap besides
-// create: fixing a contact detail after the fact (a lead admitted with
+// create: fixing a contact detail after the fact (a lead won with
 // a typo'd phone number, an org name that changes). Partial update —
 // only the fields actually passed are touched, everything else keeps
 // its current value via COALESCE, same pattern lib/db-engagements.ts's

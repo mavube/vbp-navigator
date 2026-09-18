@@ -6,7 +6,15 @@
 import { randomUUID } from "node:crypto";
 import { IS_POSTGRES, getPgPool, getSqliteDb } from "@/lib/db-driver";
 
-export type LeadStage = "new" | "contacted" | "assessed" | "admitted" | "lost";
+// Phase D (portfolio correction, Track 2): generic CRM pipeline
+// vocabulary, not PMP's own process language — "assessed"/"admitted"
+// read as if GDC only ran one certification-admission workflow.
+// "qualified"/"won" describe any Lead's journey toward any sold
+// product, matching Phase C's product_service_id anchor.
+// supabase/migrations/0024_phased_pipeline_vocabulary.sql renames the
+// existing values in place (and the check constraint) for orgs with
+// leads already created under the old names.
+export type LeadStage = "new" | "contacted" | "qualified" | "won" | "lost";
 
 export interface LeadRow {
   id: string;

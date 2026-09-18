@@ -5,7 +5,7 @@ export default function PipelinePage() {
   return (
     <Page
       title="Pipeline"
-      description="Candidates moving through Readiness Assessment and Admission — the two services this gives a de facto owner to."
+      description="Leads moving through your sales process, from first contact to won or lost — for any service or product in your portfolio, not just one."
     >
       <PipelineBoard />
     </Page>

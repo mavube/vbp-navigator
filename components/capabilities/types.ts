@@ -18,7 +18,7 @@ export interface ServiceRollup {
   requestsOpen: number;
   requestsResolved: number;
   leadsActive: number;
-  leadsAdmitted: number;
+  leadsWon: number;
   classesActive: number;
   classesCompleted: number;
   budgetPendingAmount: number;

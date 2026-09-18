@@ -1,4 +1,6 @@
-export type LeadStage = "new" | "contacted" | "assessed" | "admitted" | "lost";
+// Phase D: generic pipeline vocabulary — see lib/db-leads.ts's LeadStage
+// for the reasoning.
+export type LeadStage = "new" | "contacted" | "qualified" | "won" | "lost";
 
 export interface ServiceOption {
   id: string;

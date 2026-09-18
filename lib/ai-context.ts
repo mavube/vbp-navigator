@@ -78,7 +78,7 @@ export interface AiOrgSnapshot {
   // this app makes wherever a status-change timestamp stands in for a
   // purpose-built one (e.g. a document's updatedAt on approval).
   taskVelocity: { completedLast7Days: number; completedLast30Days: number };
-  // Leads still actively in the pipeline (not yet admitted/lost),
+  // Leads still actively in the pipeline (not yet won/lost),
   // oldest-in-current-stage first — "stage" not "creation", since a
   // lead that's been sitting in the same stage for weeks is the actual
   // signal, not one that's simply been open a while but moving.
@@ -234,12 +234,12 @@ export async function buildAiOrgSnapshot(orgId: string): Promise<AiOrgSnapshot> 
     completedLast30Days: doneTasks.filter((t) => nowMs - new Date(t.updatedAt).getTime() <= 30 * 86_400_000).length,
   };
 
-  // Pipeline aging — active leads (not yet admitted/lost), oldest time
+  // Pipeline aging — active leads (not yet won/lost), oldest time
   // in their current stage first. updatedAt is what a stage PATCH bumps
   // (app/api/leads/[id]/route.ts), so it's the real "time in this
   // stage" signal, not just "time since creation."
   const pipelineAging = leads
-    .filter((l) => l.stage !== "admitted" && l.stage !== "lost")
+    .filter((l) => l.stage !== "won" && l.stage !== "lost")
     .map((l) => ({
       contactName: l.contactName,
       serviceName: serviceNameFor.get(l.serviceId) ?? "Unknown service",

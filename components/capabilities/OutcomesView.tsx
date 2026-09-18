@@ -133,7 +133,7 @@ export function OutcomesView({
               <div>
                 <Stat label="Tasks done" value={r?.tasksDone ?? 0} />
                 <Stat label="Requests resolved" value={r?.requestsResolved ?? 0} />
-                <Stat label="Leads admitted" value={r?.leadsAdmitted ?? 0} />
+                <Stat label="Leads won" value={r?.leadsWon ?? 0} />
                 <Stat label="Classes completed" value={r?.classesCompleted ?? 0} />
                 <Stat label={`Budget approved${scopeSuffix}`} value={r?.budgetApprovedAmount ?? 0} />
                 <Stat label={`Expenses${scopeSuffix}`} value={r?.expensesTotal ?? 0} />
