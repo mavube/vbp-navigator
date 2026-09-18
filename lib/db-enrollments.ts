@@ -118,6 +118,25 @@ export async function enrollCustomer(orgId: string, classId: string, customerId:
   return { id, classId, customerId, status: "enrolled", createdAt: now, updatedAt: now };
 }
 
+// Phase E (Customer Workspace rebuild) — the reverse lookup of
+// listEnrollments above: every class a given customer is (or was)
+// enrolled in, across all classes, not just one. Used to assemble a
+// customer's own activity view rather than a class roster.
+export async function listEnrollmentsByCustomer(orgId: string, customerId: string): Promise<EnrollmentRow[]> {
+  await ensureSchema();
+  if (IS_POSTGRES) {
+    const res = await (await getPgPool()).query(
+      `SELECT ${PG_COLS} FROM class_enrollments WHERE org_id = $1 AND customer_id = $2 ORDER BY created_at DESC`,
+      [orgId, customerId]
+    );
+    return res.rows;
+  }
+  const rows = (await getSqliteDb())
+    .prepare(`SELECT * FROM class_enrollments WHERE org_id = ? AND customer_id = ? ORDER BY created_at DESC`)
+    .all(orgId, customerId);
+  return (rows as Record<string, unknown>[]).map(fromSqliteRow);
+}
+
 export async function updateEnrollmentStatus(orgId: string, id: string, status: EnrollmentStatus): Promise<void> {
   await ensureSchema();
   const now = new Date().toISOString();

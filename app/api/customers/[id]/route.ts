@@ -1,8 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateCustomer } from "@/lib/db-customers";
+import { getCustomerById, updateCustomer } from "@/lib/db-customers";
 import { getCurrentOrgId } from "@/lib/current-org";
 
 export const dynamic = "force-dynamic";
+
+// GET /api/customers/:id — Phase E (Customer Workspace rebuild): a
+// single customer, for the new /customers/[id] detail route. Everything
+// else on that page (engagements, documents, classes) is assembled
+// client-side from the existing list endpoints — same "small org, join
+// client-side" pattern the rest of this app already uses — so this
+// stays a plain single-row lookup, not a bespoke aggregate endpoint.
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const orgId = await getCurrentOrgId();
+  const customer = await getCustomerById(orgId, id);
+  if (!customer) {
+    return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+  }
+  return NextResponse.json(customer);
+}
 
 // PATCH /api/customers/:id — v3.0 roadmap Phase 10 (Cluster C): "no way
 // to fix a contact detail later." Partial update, same open-editing

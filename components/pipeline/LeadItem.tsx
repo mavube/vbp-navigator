@@ -116,20 +116,21 @@ export function LeadItem({
 
       {/* v3.0 Phase 4: winning a lead also creates a Customer +
           Engagement (app/api/leads/[id]/route.ts), which returns the
-          new customerId. Deep-links to /customers?highlight=<id>
-          (CustomersWorkspace scrolls to and highlights that card) when
-          this component was the one that just marked the lead won —
-          wonCustomerId only lives in this component's local state, so
-          a lead that was already won before this page load falls back
-          to the plain list link rather than a stale or guessed id. */}
+          new customerId — deep-links straight to that customer's own
+          workspace (Phase E's /customers/[id]) when this component was
+          the one that just marked the lead won. wonCustomerId only
+          lives in this component's local state (a Lead has no
+          customerId of its own to reload), so a lead that was already
+          won before this page load falls back to the plain Customers
+          list, which now has an "Open" link to every customer's page. */}
       {lead.stage === "won" && (
         <p style={{ fontSize: "0.75rem", color: "var(--v2-text-faint)", margin: "8px 0 0" }}>
           → Customer record created — see{" "}
           <Link
-            href={wonCustomerId ? `/customers?highlight=${wonCustomerId}` : "/customers"}
+            href={wonCustomerId ? `/customers/${wonCustomerId}` : "/customers"}
             style={{ color: "var(--v2-accent)" }}
           >
-            Customers
+            {wonCustomerId ? "their Customer page" : "Customers"}
           </Link>
         </p>
       )}

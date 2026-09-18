@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
@@ -23,14 +24,12 @@ export function CustomerItem({
   engagements,
   services,
   products,
-  highlighted,
   onUpdated,
 }: {
   customer: Customer;
   engagements: Engagement[];
   services: ServiceOption[];
   products: ProductOption[];
-  highlighted: boolean;
   onUpdated: (patch: Partial<Customer>) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -80,11 +79,8 @@ export function CustomerItem({
 
   return (
     <Card
-      id={`customer-${customer.id}`}
       style={{
         padding: "var(--v2-space-4)",
-        border: highlighted ? "2px solid var(--v2-accent)" : undefined,
-        background: highlighted ? "var(--v2-accent-soft)" : undefined,
       }}
     >
       {editing ? (
@@ -121,19 +117,26 @@ export function CustomerItem({
       ) : (
         <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--v2-space-3)", flexWrap: "wrap" }}>
           <div>
-            <div style={{ fontWeight: 600 }}>{customer.fullName}</div>
+            <Link href={`/customers/${customer.id}`} style={{ fontWeight: 600, color: "var(--v2-text)" }}>
+              {customer.fullName}
+            </Link>
             <div style={{ fontSize: "0.8rem", color: "var(--v2-text-faint)" }}>
               {[customer.email, customer.phone, customer.organizationName].filter(Boolean).join(" · ") || "No contact details on file"}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="v2-btn v2-btn-secondary"
-            style={{ padding: "4px 10px", fontSize: "0.75rem", alignSelf: "flex-start" }}
-          >
-            Edit
-          </button>
+          <div style={{ display: "flex", gap: "var(--v2-space-2)", alignSelf: "flex-start" }}>
+            <Link href={`/customers/${customer.id}`} className="v2-btn v2-btn-secondary" style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
+              Open
+            </Link>
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="v2-btn v2-btn-secondary"
+              style={{ padding: "4px 10px", fontSize: "0.75rem" }}
+            >
+              Edit
+            </button>
+          </div>
         </div>
       )}
 

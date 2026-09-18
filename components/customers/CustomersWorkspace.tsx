@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { NewCustomerForm } from "@/components/customers/NewCustomerForm";
 import { CustomerItem } from "@/components/customers/CustomerItem";
@@ -13,7 +12,10 @@ import type { Customer, Engagement, ServiceOption, ProductOption } from "@/compo
 // closed the gap the original phase's comment flagged as "real future
 // work" — editing a customer's own details is no longer read-only (see
 // CustomerItem.tsx), and a customer no longer has to arrive via Pipeline
-// at all (see NewCustomerForm.tsx below).
+// at all (see NewCustomerForm.tsx below). Phase E (Customer Workspace
+// rebuild) added the real per-customer detail route (/customers/[id] —
+// see CustomerItem.tsx's "Open" link) this flat list used to be
+// standing in for, via a ?highlight= scroll-to-card hack now removed.
 export function CustomersWorkspace() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [engagements, setEngagements] = useState<Engagement[]>([]);
@@ -21,13 +23,6 @@ export function CustomersWorkspace() {
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  // Quick win: lead admission (LeadItem.tsx) deep-links here with
-  // ?highlight=<customerId> instead of a plain "see Customers" link —
-  // there's no per-customer detail page/route to deep-link to yet (a
-  // real gap, tracked in the enhancement backlog's Cluster C), so this
-  // scrolls to and highlights the right card on this list instead of
-  // pretending a full detail route exists.
-  const highlightId = useSearchParams().get("highlight");
 
   useEffect(() => {
     Promise.all([
@@ -45,12 +40,6 @@ export function CustomersWorkspace() {
       .catch(() => setError("Couldn't load customers — try refreshing."))
       .finally(() => setLoading(false));
   }, []);
-
-  useEffect(() => {
-    if (!highlightId || customers.length === 0) return;
-    const el = document.getElementById(`customer-${highlightId}`);
-    el?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [highlightId, customers]);
 
   function serviceName(serviceId: string): string {
     return services.find((s) => s.id === serviceId)?.name ?? "Unknown service";
@@ -79,7 +68,6 @@ export function CustomersWorkspace() {
               engagements={engagements}
               services={services}
               products={products}
-              highlighted={highlightId === c.id}
               onUpdated={(patch) => setCustomers((prev) => prev.map((x) => (x.id === c.id ? { ...x, ...patch } : x)))}
             />
           ))}
