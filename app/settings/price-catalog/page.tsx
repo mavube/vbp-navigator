@@ -4,8 +4,8 @@ import { PriceCatalogManager } from "@/components/settings/PriceCatalogManager";
 export default function PriceCatalogPage() {
   return (
     <Page
-      title="Price Catalog"
-      description="Predefined, tax-exclusive prices staff select from when building a Proposal, Quotation, or Invoice — instead of typing a line item by hand. Org Admin only."
+      title="Products & Services Catalog"
+      description="What GDC actually offers — the real portfolio, not just PMP. Each item carries an offering definition (category, target customer, delivery model, outcome) plus the tax-exclusive price staff select when building a Proposal, Quotation, or Invoice. Org Admin only."
     >
       <PriceCatalogManager />
     </Page>

@@ -40,6 +40,31 @@ export async function POST(req: NextRequest) {
   const description = typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
   const createdByName = await resolveDisplayName(ctx, typeof body.createdByName === "string" ? body.createdByName : undefined);
 
-  const item = await createPriceCatalogItem(ctx.orgId, { name, description, unitPrice, currency, taxRate, createdByName });
+  // Phase 16 (Products & Services Catalog) — offering-definition
+  // fields. All optional free text; str() trims and caps length so a
+  // pasted paragraph can't blow out a column, same discipline as name/
+  // description above. requiredCapabilities is a soft list of
+  // lib/db-services.ts service ids — not validated against that table
+  // here (informational cross-reference, not a foreign key).
+  const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  const category = str(body.category, 100);
+  const offeringType = str(body.offeringType, 100);
+  const targetCustomer = str(body.targetCustomer, 300);
+  const standardOffering = str(body.standardOffering, 1000);
+  const deliveryModel = str(body.deliveryModel, 200);
+  const typicalDuration = str(body.typicalDuration, 100);
+  const pricingModel = str(body.pricingModel, 200);
+  const included = str(body.included, 1000);
+  const expectedOutcome = str(body.expectedOutcome, 1000);
+  const relatedDocuments = str(body.relatedDocuments, 500);
+  const requiredCapabilities = Array.isArray(body.requiredCapabilities)
+    ? body.requiredCapabilities.filter((x: unknown): x is string => typeof x === "string")
+    : [];
+
+  const item = await createPriceCatalogItem(ctx.orgId, {
+    name, description, unitPrice, currency, taxRate, createdByName,
+    category, offeringType, targetCustomer, standardOffering, deliveryModel,
+    typicalDuration, pricingModel, included, expectedOutcome, requiredCapabilities, relatedDocuments,
+  });
   return NextResponse.json(item, { status: 201 });
 }
