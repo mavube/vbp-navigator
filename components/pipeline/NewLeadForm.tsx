@@ -3,22 +3,27 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import type { ServiceOption, Lead } from "@/components/pipeline/types";
+import type { ServiceOption, ProductOption, Lead } from "@/components/pipeline/types";
 
 export function NewLeadForm({
   services,
+  products,
   onCreated,
 }: {
   services: ServiceOption[];
+  products: ProductOption[];
   onCreated: (lead: Lead) => void;
 }) {
   const [serviceId, setServiceId] = useState("");
+  const [productServiceId, setProductServiceId] = useState("");
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  const activeProducts = products.filter((p) => p.active);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -28,7 +33,7 @@ export function NewLeadForm({
       const res = await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceId, contactName, contactEmail, contactPhone, notes }),
+        body: JSON.stringify({ serviceId, productServiceId: productServiceId || undefined, contactName, contactEmail, contactPhone, notes }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -36,6 +41,7 @@ export function NewLeadForm({
       }
       const lead: Lead = await res.json();
       onCreated(lead);
+      setProductServiceId("");
       setContactName("");
       setContactEmail("");
       setContactPhone("");
@@ -65,6 +71,21 @@ export function NewLeadForm({
           </option>
         ))}
       </select>
+      {activeProducts.length > 0 && (
+        <select
+          value={productServiceId}
+          onChange={(e) => setProductServiceId(e.target.value)}
+          className="v2-input"
+          style={{ maxWidth: 260 }}
+        >
+          <option value="">Product/offering (optional)…</option>
+          {activeProducts.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      )}
       <Input
         placeholder="Contact name"
         value={contactName}

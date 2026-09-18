@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getLeadServiceId, updateLeadStage, type LeadStage } from "@/lib/db-leads";
+import { getLeadServiceId, updateLeadStage, updateLeadProductServiceId, type LeadStage } from "@/lib/db-leads";
 import { admitLead } from "@/lib/db-engagements";
 import { getUserContext, canManageService } from "@/lib/permissions";
 
@@ -7,16 +7,21 @@ export const dynamic = "force-dynamic";
 
 const VALID_STAGES: LeadStage[] = ["new", "contacted", "assessed", "admitted", "lost"];
 
-// PATCH /api/leads/:id — advance (or drop) a lead's stage. Same gate as
-// tasks: that lead's service's Service Owner/Contributor or an Org
-// Admin only — see app/api/tasks/[id]/route.ts for the identical
-// reasoning.
+// PATCH /api/leads/:id — advance (or drop) a lead's stage, and/or
+// (Phase C) attach which catalog product it's for. Same gate as tasks:
+// that lead's service's Service Owner/Contributor or an Org Admin only
+// — see app/api/tasks/[id]/route.ts for the identical reasoning.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
 
-  if (typeof body.stage !== "string" || !VALID_STAGES.includes(body.stage as LeadStage)) {
+  const hasStage = typeof body.stage === "string";
+  const hasProduct = "productServiceId" in body;
+  if (hasStage && !VALID_STAGES.includes(body.stage as LeadStage)) {
     return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
+  }
+  if (!hasStage && !hasProduct) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
   const ctx = await getUserContext();
@@ -26,6 +31,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
   if (!canManageService(ctx, serviceId)) {
     return NextResponse.json({ error: "Not allowed to update this lead" }, { status: 403 });
+  }
+
+  if (hasProduct) {
+    const productServiceId = typeof body.productServiceId === "string" && body.productServiceId ? body.productServiceId : null;
+    await updateLeadProductServiceId(ctx.orgId, id, productServiceId);
+  }
+  if (!hasStage) {
+    return NextResponse.json({ id, productServiceId: body.productServiceId ?? null });
   }
 
   await updateLeadStage(ctx.orgId, id, body.stage as LeadStage);

@@ -25,10 +25,12 @@ const STATUS_LABEL: Record<ClassStatus, string> = {
 export function ClassItem({
   cls,
   serviceName,
+  productName,
   onStatusChange,
 }: {
   cls: Class;
   serviceName: string;
+  productName: string | null;
   onStatusChange: (status: ClassStatus) => void;
 }) {
   const [tasks, setTasks] = useState<SetupTask[]>([]);
@@ -176,6 +178,11 @@ export function ClassItem({
             {cls.scheduledDate ? ` · ${cls.scheduledDate}` : ""}
             {cls.instructorName ? ` · ${cls.instructorName}` : ""}
           </div>
+          {productName && (
+            <div style={{ marginTop: 2 }}>
+              <Badge tone="accent">{productName}</Badge>
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", gap: "var(--v2-space-2)", alignItems: "center" }}>
           <Badge tone={STATUS_TONE[cls.status]}>{STATUS_LABEL[cls.status]}</Badge>

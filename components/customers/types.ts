@@ -4,6 +4,15 @@ export interface ServiceOption {
   name: string;
 }
 
+// Phase C (portfolio correction) — see components/pipeline/types.ts's
+// identical ProductOption for the reasoning.
+export interface ProductOption {
+  id: string;
+  name: string;
+  category: string;
+  active: boolean;
+}
+
 export interface Customer {
   id: string;
   fullName: string;
@@ -20,6 +29,7 @@ export interface Engagement {
   id: string;
   customerId: string;
   serviceId: string;
+  productServiceId: string | null;
   leadId: string | null;
   status: EngagementStatus;
   startedAt: string;

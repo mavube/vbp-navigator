@@ -7,9 +7,19 @@ export interface ServiceOption {
   name: string;
 }
 
+// Phase C (portfolio correction) — see components/pipeline/types.ts's
+// identical ProductOption for the reasoning.
+export interface ProductOption {
+  id: string;
+  name: string;
+  category: string;
+  active: boolean;
+}
+
 export interface Prospect {
   id: string;
   serviceId: string | null;
+  productServiceId: string | null;
   source: ProspectSource;
   fullName: string;
   email: string;

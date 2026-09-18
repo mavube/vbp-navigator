@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { NewCustomerForm } from "@/components/customers/NewCustomerForm";
 import { CustomerItem } from "@/components/customers/CustomerItem";
-import type { Customer, Engagement, ServiceOption } from "@/components/customers/types";
+import type { Customer, Engagement, ServiceOption, ProductOption } from "@/components/customers/types";
 
 // v3.0 roadmap Phase 4 (§9, Customer intelligence) — the first view
 // onto the Customer/Engagement entities admitting a Lead now creates
@@ -18,6 +18,7 @@ export function CustomersWorkspace() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [engagements, setEngagements] = useState<Engagement[]>([]);
   const [services, setServices] = useState<ServiceOption[]>([]);
+  const [products, setProducts] = useState<ProductOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   // Quick win: lead admission (LeadItem.tsx) deep-links here with
@@ -32,11 +33,14 @@ export function CustomersWorkspace() {
     Promise.all([
       fetch("/api/services", { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
       fetch("/api/customers", { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
+      // Phase C: best-effort — only feeds the engagement product label.
+      fetch("/api/price-catalog", { cache: "no-store" }).then((res) => (res.ok ? res.json() : [])).catch(() => []),
     ])
-      .then(([servicesData, customersData]) => {
+      .then(([servicesData, customersData, catalogData]) => {
         setServices(servicesData);
         setCustomers(customersData.customers);
         setEngagements(customersData.engagements);
+        setProducts(catalogData);
       })
       .catch(() => setError("Couldn't load customers — try refreshing."))
       .finally(() => setLoading(false));
@@ -74,6 +78,7 @@ export function CustomersWorkspace() {
               customer={c}
               engagements={engagements}
               services={services}
+              products={products}
               highlighted={highlightId === c.id}
               onUpdated={(patch) => setCustomers((prev) => prev.map((x) => (x.id === c.id ? { ...x, ...patch } : x)))}
             />

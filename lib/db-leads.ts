@@ -11,6 +11,12 @@ export type LeadStage = "new" | "contacted" | "assessed" | "admitted" | "lost";
 export interface LeadRow {
   id: string;
   serviceId: string;
+  // Phase C (portfolio correction) — which Products & Services Catalog
+  // item this lead is actually pursuing, if one was picked. Separate
+  // from serviceId on purpose: serviceId is "which internal capability
+  // owns this," productServiceId is "what is this person buying." See
+  // supabase/migrations/0023_phasec_product_service_anchor.sql.
+  productServiceId: string | null;
   contactName: string;
   contactEmail: string;
   contactPhone: string;
@@ -23,6 +29,7 @@ export interface LeadRow {
 
 export interface NewLead {
   serviceId: string;
+  productServiceId?: string | null;
   contactName: string;
   contactEmail?: string;
   contactPhone?: string;
@@ -35,7 +42,8 @@ function ensureSchema(): Promise<void> {
 
   if (!schemaReady) {
     schemaReady = (async () => {
-      (await getSqliteDb()).exec(`CREATE TABLE IF NOT EXISTS leads (
+      const db = await getSqliteDb();
+      db.exec(`CREATE TABLE IF NOT EXISTS leads (
         id TEXT PRIMARY KEY,
         org_id TEXT NOT NULL,
         service_id TEXT NOT NULL,
@@ -48,6 +56,13 @@ function ensureSchema(): Promise<void> {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )`);
+      // Phase C — same defensive per-column ALTER pattern used
+      // throughout this codebase (see lib/db-price-catalog.ts), so an
+      // existing local dev.db from before this phase still works.
+      const cols = new Set(
+        (db.prepare(`PRAGMA table_info(leads)`).all() as Array<{ name: string }>).map((c) => c.name)
+      );
+      if (!cols.has("product_service_id")) db.exec(`ALTER TABLE leads ADD COLUMN product_service_id TEXT`);
     })();
   }
   return schemaReady;
@@ -57,6 +72,7 @@ function fromSqliteRow(row: Record<string, unknown>): LeadRow {
   return {
     id: row.id as string,
     serviceId: row.service_id as string,
+    productServiceId: (row.product_service_id as string) ?? null,
     contactName: row.contact_name as string,
     contactEmail: row.contact_email as string,
     contactPhone: row.contact_phone as string,
@@ -68,24 +84,21 @@ function fromSqliteRow(row: Record<string, unknown>): LeadRow {
   };
 }
 
+const PG_COLS = `id, service_id AS "serviceId", product_service_id AS "productServiceId",
+                    contact_name AS "contactName", contact_email AS "contactEmail",
+                    contact_phone AS "contactPhone", stage, owner_id AS "ownerId", notes,
+                    created_at AS "createdAt", updated_at AS "updatedAt"`;
+
 export async function listLeads(orgId: string, serviceId?: string): Promise<LeadRow[]> {
   await ensureSchema();
   if (IS_POSTGRES) {
     const res = serviceId
       ? await (await getPgPool()).query(
-          `SELECT id, service_id AS "serviceId", contact_name AS "contactName",
-                  contact_email AS "contactEmail", contact_phone AS "contactPhone",
-                  stage, owner_id AS "ownerId", notes,
-                  created_at AS "createdAt", updated_at AS "updatedAt"
-           FROM leads WHERE org_id = $1 AND service_id = $2 ORDER BY created_at DESC`,
+          `SELECT ${PG_COLS} FROM leads WHERE org_id = $1 AND service_id = $2 ORDER BY created_at DESC`,
           [orgId, serviceId]
         )
       : await (await getPgPool()).query(
-          `SELECT id, service_id AS "serviceId", contact_name AS "contactName",
-                  contact_email AS "contactEmail", contact_phone AS "contactPhone",
-                  stage, owner_id AS "ownerId", notes,
-                  created_at AS "createdAt", updated_at AS "updatedAt"
-           FROM leads WHERE org_id = $1 ORDER BY created_at DESC`,
+          `SELECT ${PG_COLS} FROM leads WHERE org_id = $1 ORDER BY created_at DESC`,
           [orgId]
         );
     return res.rows;
@@ -104,25 +117,27 @@ export async function createLead(orgId: string, input: NewLead): Promise<LeadRow
   const contactEmail = input.contactEmail ?? "";
   const contactPhone = input.contactPhone ?? "";
   const notes = input.notes ?? "";
+  const productServiceId = input.productServiceId ?? null;
 
   if (IS_POSTGRES) {
     await (await getPgPool()).query(
-      `INSERT INTO leads (id, org_id, service_id, contact_name, contact_email, contact_phone, stage, notes, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,'new',$7,$8,$8)`,
-      [id, orgId, input.serviceId, input.contactName, contactEmail, contactPhone, notes, now]
+      `INSERT INTO leads (id, org_id, service_id, product_service_id, contact_name, contact_email, contact_phone, stage, notes, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'new',$8,$9,$9)`,
+      [id, orgId, input.serviceId, productServiceId, input.contactName, contactEmail, contactPhone, notes, now]
     );
   } else {
     (await getSqliteDb())
       .prepare(
-        `INSERT INTO leads (id, org_id, service_id, contact_name, contact_email, contact_phone, stage, notes, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,'new',?,?,?)`
+        `INSERT INTO leads (id, org_id, service_id, product_service_id, contact_name, contact_email, contact_phone, stage, notes, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,'new',?,?,?)`
       )
-      .run(id, orgId, input.serviceId, input.contactName, contactEmail, contactPhone, notes, now, now);
+      .run(id, orgId, input.serviceId, productServiceId, input.contactName, contactEmail, contactPhone, notes, now, now);
   }
 
   return {
     id,
     serviceId: input.serviceId,
+    productServiceId,
     contactName: input.contactName,
     contactEmail,
     contactPhone,
@@ -141,11 +156,7 @@ export async function getLead(orgId: string, id: string): Promise<LeadRow | null
   await ensureSchema();
   if (IS_POSTGRES) {
     const res = await (await getPgPool()).query(
-      `SELECT id, service_id AS "serviceId", contact_name AS "contactName",
-              contact_email AS "contactEmail", contact_phone AS "contactPhone",
-              stage, owner_id AS "ownerId", notes,
-              created_at AS "createdAt", updated_at AS "updatedAt"
-       FROM leads WHERE org_id = $1 AND id = $2`,
+      `SELECT ${PG_COLS} FROM leads WHERE org_id = $1 AND id = $2`,
       [orgId, id]
     );
     return res.rows[0] ?? null;
@@ -167,11 +178,7 @@ export async function findLeadByEmail(orgId: string, email: string): Promise<Lea
   await ensureSchema();
   if (IS_POSTGRES) {
     const res = await (await getPgPool()).query(
-      `SELECT id, service_id AS "serviceId", contact_name AS "contactName",
-              contact_email AS "contactEmail", contact_phone AS "contactPhone",
-              stage, owner_id AS "ownerId", notes,
-              created_at AS "createdAt", updated_at AS "updatedAt"
-       FROM leads WHERE org_id = $1 AND contact_email = $2 ORDER BY created_at DESC LIMIT 1`,
+      `SELECT ${PG_COLS} FROM leads WHERE org_id = $1 AND contact_email = $2 ORDER BY created_at DESC LIMIT 1`,
       [orgId, email]
     );
     return res.rows[0] ?? null;
@@ -209,6 +216,25 @@ export async function updateLeadStage(orgId: string, id: string, stage: LeadStag
     (await getSqliteDb())
       .prepare(`UPDATE leads SET stage = ?, updated_at = ? WHERE org_id = ? AND id = ?`)
       .run(stage, now, orgId, id);
+  }
+}
+
+// Phase C — lets staff attach (or clear) which catalog product a lead
+// is pursuing after the fact, e.g. once the catalog has real entries
+// but the lead was created before it did. Separate from updateLeadStage
+// since the two are independent decisions.
+export async function updateLeadProductServiceId(orgId: string, id: string, productServiceId: string | null): Promise<void> {
+  await ensureSchema();
+  const now = new Date().toISOString();
+  if (IS_POSTGRES) {
+    await (await getPgPool()).query(
+      `UPDATE leads SET product_service_id = $1, updated_at = $2 WHERE org_id = $3 AND id = $4`,
+      [productServiceId, now, orgId, id]
+    );
+  } else {
+    (await getSqliteDb())
+      .prepare(`UPDATE leads SET product_service_id = ?, updated_at = ? WHERE org_id = ? AND id = ?`)
+      .run(productServiceId, now, orgId, id);
   }
 }
 

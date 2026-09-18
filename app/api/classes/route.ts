@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
 
   const cls = await createClass(orgId, {
     serviceId: body.serviceId,
+    productServiceId: typeof body.productServiceId === "string" && body.productServiceId ? body.productServiceId : null,
     title: body.title.trim().slice(0, 200),
     scheduledDate: typeof body.scheduledDate === "string" ? body.scheduledDate : null,
     instructorName: typeof body.instructorName === "string" ? body.instructorName.slice(0, 200) : undefined,

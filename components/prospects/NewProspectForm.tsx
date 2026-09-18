@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import type { Prospect, ServiceOption } from "@/components/prospects/types";
+import type { Prospect, ServiceOption, ProductOption } from "@/components/prospects/types";
 
 // v3.0 roadmap Phase 10 (Cluster C) — the staff-facing counterpart to
 // /apply and /assess: someone who called or emailed in, logged here
@@ -11,16 +11,26 @@ import type { Prospect, ServiceOption } from "@/components/prospects/types";
 // (ProspectsWorkspace.tsx's "Needs review" section) as any public
 // submission — source is always 'manual', set server-side regardless
 // of what this form sends (see app/api/prospects/route.ts).
-export function NewProspectForm({ services, onCreated }: { services: ServiceOption[]; onCreated: (p: Prospect) => void }) {
+export function NewProspectForm({
+  services,
+  products,
+  onCreated,
+}: {
+  services: ServiceOption[];
+  products: ProductOption[];
+  onCreated: (p: Prospect) => void;
+}) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [serviceId, setServiceId] = useState("");
+  const [productServiceId, setProductServiceId] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const cvsServices = services.filter((s) => s.type === "cvs");
+  const activeProducts = products.filter((p) => p.active);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,7 +40,14 @@ export function NewProspectForm({ services, onCreated }: { services: ServiceOpti
       const res = await fetch("/api/prospects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName, email: email || undefined, phone: phone || undefined, serviceId: serviceId || undefined, message: message || undefined }),
+        body: JSON.stringify({
+          fullName,
+          email: email || undefined,
+          phone: phone || undefined,
+          serviceId: serviceId || undefined,
+          productServiceId: productServiceId || undefined,
+          message: message || undefined,
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -42,6 +59,7 @@ export function NewProspectForm({ services, onCreated }: { services: ServiceOpti
       setEmail("");
       setPhone("");
       setServiceId("");
+      setProductServiceId("");
       setMessage("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't log inquiry");
@@ -62,6 +80,14 @@ export function NewProspectForm({ services, onCreated }: { services: ServiceOpti
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
         </select>
+        {activeProducts.length > 0 && (
+          <select value={productServiceId} onChange={(e) => setProductServiceId(e.target.value)} className="v2-input" style={{ maxWidth: 220 }}>
+            <option value="">Which product (optional)…</option>
+            {activeProducts.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        )}
       </div>
       <textarea
         className="v2-input"

@@ -8,9 +8,19 @@ export interface ServiceOption {
   department: string;
 }
 
+// Phase C (portfolio correction) — see components/pipeline/types.ts's
+// identical ProductOption for the reasoning.
+export interface ProductOption {
+  id: string;
+  name: string;
+  category: string;
+  active: boolean;
+}
+
 export interface Class {
   id: string;
   serviceId: string;
+  productServiceId: string | null;
   title: string;
   scheduledDate: string | null;
   instructorName: string;

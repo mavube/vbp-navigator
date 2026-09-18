@@ -27,10 +27,12 @@ const STAGE_LABEL: Record<LeadStage, string> = {
 export function LeadItem({
   lead,
   serviceName,
+  productName,
   onStageChange,
 }: {
   lead: Lead;
   serviceName: string;
+  productName: string | null;
   onStageChange: (stage: LeadStage) => void;
 }) {
   const [error, setError] = useState("");
@@ -71,6 +73,11 @@ export function LeadItem({
             {lead.contactEmail ? ` · ${lead.contactEmail}` : ""}
             {lead.contactPhone ? ` · ${lead.contactPhone}` : ""}
           </div>
+          {productName && (
+            <div style={{ marginTop: 2 }}>
+              <Badge tone="accent">{productName}</Badge>
+            </div>
+          )}
           {lead.notes && (
             <div style={{ fontSize: "0.8rem", color: "var(--v2-text-muted)", marginTop: 4, whiteSpace: "pre-wrap" }}>
               {lead.notes}

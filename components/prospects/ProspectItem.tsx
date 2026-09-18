@@ -25,11 +25,13 @@ export function ProspectItem({
   prospect,
   services,
   serviceName,
+  productName,
   onChange,
 }: {
   prospect: Prospect;
   services: ServiceOption[];
   serviceName: string | null;
+  productName: string | null;
   onChange: (updated: Partial<Prospect>) => void;
 }) {
   const [serviceId, setServiceId] = useState(prospect.serviceId ?? "");
@@ -102,6 +104,11 @@ export function ProspectItem({
             {[prospect.email, prospect.phone].filter(Boolean).join(" · ") || "No contact info given"}
             {serviceName ? ` · ${serviceName}` : ""}
           </div>
+          {productName && (
+            <div style={{ marginTop: 2 }}>
+              <Badge tone="accent">{productName}</Badge>
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", gap: "var(--v2-space-2)", alignItems: "center" }}>
           <Badge tone="neutral">

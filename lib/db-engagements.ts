@@ -17,6 +17,11 @@ export interface EngagementRow {
   id: string;
   customerId: string;
   serviceId: string;
+  // Phase C (portfolio correction) — which catalog product this
+  // engagement is actually delivering, carried over from the admitted
+  // Lead's own productServiceId (if it had one). See lib/db-leads.ts's
+  // LeadRow for the same field's reasoning.
+  productServiceId: string | null;
   leadId: string | null;
   status: EngagementStatus;
   startedAt: string;
@@ -31,7 +36,8 @@ function ensureSchema(): Promise<void> {
 
   if (!schemaReady) {
     schemaReady = (async () => {
-      (await getSqliteDb()).exec(`CREATE TABLE IF NOT EXISTS engagements (
+      const db = await getSqliteDb();
+      db.exec(`CREATE TABLE IF NOT EXISTS engagements (
         id TEXT PRIMARY KEY,
         org_id TEXT NOT NULL,
         customer_id TEXT NOT NULL,
@@ -43,6 +49,10 @@ function ensureSchema(): Promise<void> {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )`);
+      const cols = new Set(
+        (db.prepare(`PRAGMA table_info(engagements)`).all() as Array<{ name: string }>).map((c) => c.name)
+      );
+      if (!cols.has("product_service_id")) db.exec(`ALTER TABLE engagements ADD COLUMN product_service_id TEXT`);
     })();
   }
   return schemaReady;
@@ -53,6 +63,7 @@ function fromSqliteRow(row: Record<string, unknown>): EngagementRow {
     id: row.id as string,
     customerId: row.customer_id as string,
     serviceId: row.service_id as string,
+    productServiceId: (row.product_service_id as string) ?? null,
     leadId: (row.lead_id as string) ?? null,
     status: row.status as EngagementStatus,
     startedAt: row.started_at as string,
@@ -62,7 +73,8 @@ function fromSqliteRow(row: Record<string, unknown>): EngagementRow {
   };
 }
 
-const PG_COLS = `id, customer_id AS "customerId", service_id AS "serviceId", lead_id AS "leadId", status,
+const PG_COLS = `id, customer_id AS "customerId", service_id AS "serviceId",
+                    product_service_id AS "productServiceId", lead_id AS "leadId", status,
                     started_at AS "startedAt", outcome_note AS "outcomeNote",
                     created_at AS "createdAt", updated_at AS "updatedAt"`;
 
@@ -97,28 +109,29 @@ export async function getEngagement(orgId: string, id: string): Promise<Engageme
   return row ? fromSqliteRow(row) : null;
 }
 
-async function createEngagement(orgId: string, input: { customerId: string; serviceId: string; leadId?: string | null }): Promise<EngagementRow> {
+async function createEngagement(orgId: string, input: { customerId: string; serviceId: string; productServiceId?: string | null; leadId?: string | null }): Promise<EngagementRow> {
   await ensureSchema();
   const id = randomUUID();
   const now = new Date().toISOString();
   const leadId = input.leadId ?? null;
+  const productServiceId = input.productServiceId ?? null;
 
   if (IS_POSTGRES) {
     await (await getPgPool()).query(
-      `INSERT INTO engagements (id, org_id, customer_id, service_id, lead_id, status, started_at, outcome_note, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,'active',$6,'',$6,$6)`,
-      [id, orgId, input.customerId, input.serviceId, leadId, now]
+      `INSERT INTO engagements (id, org_id, customer_id, service_id, product_service_id, lead_id, status, started_at, outcome_note, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,'active',$7,'',$7,$7)`,
+      [id, orgId, input.customerId, input.serviceId, productServiceId, leadId, now]
     );
   } else {
     (await getSqliteDb())
       .prepare(
-        `INSERT INTO engagements (id, org_id, customer_id, service_id, lead_id, status, started_at, outcome_note, created_at, updated_at)
-         VALUES (?,?,?,?,?,'active',?,'',?,?)`
+        `INSERT INTO engagements (id, org_id, customer_id, service_id, product_service_id, lead_id, status, started_at, outcome_note, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,'active',?,'',?,?)`
       )
-      .run(id, orgId, input.customerId, input.serviceId, leadId, now, now, now);
+      .run(id, orgId, input.customerId, input.serviceId, productServiceId, leadId, now, now, now);
   }
 
-  return { id, customerId: input.customerId, serviceId: input.serviceId, leadId, status: "active", startedAt: now, outcomeNote: "", createdAt: now, updatedAt: now };
+  return { id, customerId: input.customerId, serviceId: input.serviceId, productServiceId, leadId, status: "active", startedAt: now, outcomeNote: "", createdAt: now, updatedAt: now };
 }
 
 export async function updateEngagementStatus(orgId: string, id: string, status: EngagementStatus, outcomeNote?: string): Promise<void> {
@@ -152,7 +165,12 @@ export async function admitLead(orgId: string, leadId: string): Promise<{ custom
     phone: lead.contactPhone,
     sourceLeadId: lead.id,
   });
-  const engagement = await createEngagement(orgId, { customerId: customer.id, serviceId: lead.serviceId, leadId: lead.id });
+  const engagement = await createEngagement(orgId, {
+    customerId: customer.id,
+    serviceId: lead.serviceId,
+    productServiceId: lead.productServiceId,
+    leadId: lead.id,
+  });
   return { customer, engagement };
 }
 

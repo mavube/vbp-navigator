@@ -25,6 +25,11 @@ export type ClassStatus = "scheduled" | "in_progress" | "completed" | "cancelled
 export interface ClassRow {
   id: string;
   serviceId: string;
+  // Phase C (portfolio correction) — which catalog product this class
+  // instance is actually delivering (e.g. "PMP Master Class", "MS
+  // Project Training"), if one was picked. Separate from serviceId —
+  // see lib/db-leads.ts's LeadRow for the same field's reasoning.
+  productServiceId: string | null;
   title: string;
   scheduledDate: string | null;
   instructorName: string;
@@ -36,6 +41,7 @@ export interface ClassRow {
 
 export interface NewClass {
   serviceId: string;
+  productServiceId?: string | null;
   title: string;
   scheduledDate?: string | null;
   instructorName?: string;
@@ -59,7 +65,8 @@ function ensureSchema(): Promise<void> {
 
   if (!schemaReady) {
     schemaReady = (async () => {
-      (await getSqliteDb()).exec(`CREATE TABLE IF NOT EXISTS classes (
+      const db = await getSqliteDb();
+      db.exec(`CREATE TABLE IF NOT EXISTS classes (
         id TEXT PRIMARY KEY,
         org_id TEXT NOT NULL,
         service_id TEXT NOT NULL,
@@ -71,6 +78,10 @@ function ensureSchema(): Promise<void> {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )`);
+      const cols = new Set(
+        (db.prepare(`PRAGMA table_info(classes)`).all() as Array<{ name: string }>).map((c) => c.name)
+      );
+      if (!cols.has("product_service_id")) db.exec(`ALTER TABLE classes ADD COLUMN product_service_id TEXT`);
     })();
   }
   return schemaReady;
@@ -80,6 +91,7 @@ function fromSqliteRow(row: Record<string, unknown>): ClassRow {
   return {
     id: row.id as string,
     serviceId: row.service_id as string,
+    productServiceId: (row.product_service_id as string) ?? null,
     title: row.title as string,
     scheduledDate: (row.scheduled_date as string) ?? null,
     instructorName: row.instructor_name as string,
@@ -92,7 +104,8 @@ function fromSqliteRow(row: Record<string, unknown>): ClassRow {
 
 export async function listClasses(orgId: string, serviceId?: string): Promise<ClassRow[]> {
   await ensureSchema();
-  const cols = `id, service_id AS "serviceId", title, scheduled_date AS "scheduledDate",
+  const cols = `id, service_id AS "serviceId", product_service_id AS "productServiceId", title,
+                  scheduled_date AS "scheduledDate",
                   instructor_name AS "instructorName", status, notes,
                   created_at AS "createdAt", updated_at AS "updatedAt"`;
   if (IS_POSTGRES) {
@@ -127,20 +140,21 @@ export async function createClass(orgId: string, input: NewClass): Promise<Class
   const scheduledDate = input.scheduledDate ?? null;
   const instructorName = input.instructorName ?? "";
   const notes = input.notes ?? "";
+  const productServiceId = input.productServiceId ?? null;
 
   if (IS_POSTGRES) {
     await (await getPgPool()).query(
-      `INSERT INTO classes (id, org_id, service_id, title, scheduled_date, instructor_name, status, notes, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,'scheduled',$7,$8,$8)`,
-      [id, orgId, input.serviceId, input.title, scheduledDate, instructorName, notes, now]
+      `INSERT INTO classes (id, org_id, service_id, product_service_id, title, scheduled_date, instructor_name, status, notes, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'scheduled',$8,$9,$9)`,
+      [id, orgId, input.serviceId, productServiceId, input.title, scheduledDate, instructorName, notes, now]
     );
   } else {
     (await getSqliteDb())
       .prepare(
-        `INSERT INTO classes (id, org_id, service_id, title, scheduled_date, instructor_name, status, notes, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,'scheduled',?,?,?)`
+        `INSERT INTO classes (id, org_id, service_id, product_service_id, title, scheduled_date, instructor_name, status, notes, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,'scheduled',?,?,?)`
       )
-      .run(id, orgId, input.serviceId, input.title, scheduledDate, instructorName, notes, now, now);
+      .run(id, orgId, input.serviceId, productServiceId, input.title, scheduledDate, instructorName, notes, now, now);
   }
 
   for (const taskTitle of STANDARD_SETUP_TASKS) {
@@ -150,6 +164,7 @@ export async function createClass(orgId: string, input: NewClass): Promise<Class
   return {
     id,
     serviceId: input.serviceId,
+    productServiceId,
     title: input.title,
     scheduledDate,
     instructorName,

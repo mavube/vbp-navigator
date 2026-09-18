@@ -20,6 +20,11 @@ export type ProspectStatus = "new" | "reviewed" | "promoted" | "declined";
 export interface ProspectRow {
   id: string;
   serviceId: string | null;
+  // Phase C (portfolio correction) — which catalog product this
+  // prospect actually asked about, if the intake form (public or
+  // staff-logged) offered a real catalog to pick from. See
+  // lib/db-leads.ts's LeadRow for the same field's reasoning.
+  productServiceId: string | null;
   source: ProspectSource;
   fullName: string;
   email: string;
@@ -34,6 +39,7 @@ export interface ProspectRow {
 
 export interface NewProspect {
   serviceId?: string | null;
+  productServiceId?: string | null;
   source: ProspectSource;
   fullName: string;
   email?: string;
@@ -48,7 +54,8 @@ function ensureSchema(): Promise<void> {
 
   if (!schemaReady) {
     schemaReady = (async () => {
-      (await getSqliteDb()).exec(`CREATE TABLE IF NOT EXISTS prospects (
+      const db = await getSqliteDb();
+      db.exec(`CREATE TABLE IF NOT EXISTS prospects (
         id TEXT PRIMARY KEY,
         org_id TEXT NOT NULL,
         service_id TEXT,
@@ -63,6 +70,10 @@ function ensureSchema(): Promise<void> {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )`);
+      const cols = new Set(
+        (db.prepare(`PRAGMA table_info(prospects)`).all() as Array<{ name: string }>).map((c) => c.name)
+      );
+      if (!cols.has("product_service_id")) db.exec(`ALTER TABLE prospects ADD COLUMN product_service_id TEXT`);
     })();
   }
   return schemaReady;
@@ -72,6 +83,7 @@ function fromSqliteRow(row: Record<string, unknown>): ProspectRow {
   return {
     id: row.id as string,
     serviceId: (row.service_id as string) ?? null,
+    productServiceId: (row.product_service_id as string) ?? null,
     source: row.source as ProspectSource,
     fullName: row.full_name as string,
     email: row.email as string,
@@ -85,7 +97,8 @@ function fromSqliteRow(row: Record<string, unknown>): ProspectRow {
   };
 }
 
-const PG_COLS = `id, service_id AS "serviceId", source, full_name AS "fullName", email, phone, message,
+const PG_COLS = `id, service_id AS "serviceId", product_service_id AS "productServiceId", source,
+                    full_name AS "fullName", email, phone, message,
                     assessment_answers AS "assessmentAnswers", status, lead_id AS "leadId",
                     created_at AS "createdAt", updated_at AS "updatedAt"`;
 
@@ -123,6 +136,7 @@ export async function createProspect(orgId: string, input: NewProspect): Promise
   const id = randomUUID();
   const now = new Date().toISOString();
   const serviceId = input.serviceId ?? null;
+  const productServiceId = input.productServiceId ?? null;
   const email = input.email ?? "";
   const phone = input.phone ?? "";
   const message = input.message ?? "";
@@ -130,22 +144,23 @@ export async function createProspect(orgId: string, input: NewProspect): Promise
 
   if (IS_POSTGRES) {
     await (await getPgPool()).query(
-      `INSERT INTO prospects (id, org_id, service_id, source, full_name, email, phone, message, assessment_answers, status, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'new',$10,$10)`,
-      [id, orgId, serviceId, input.source, input.fullName, email, phone, message, JSON.stringify(assessmentAnswers), now]
+      `INSERT INTO prospects (id, org_id, service_id, product_service_id, source, full_name, email, phone, message, assessment_answers, status, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'new',$11,$11)`,
+      [id, orgId, serviceId, productServiceId, input.source, input.fullName, email, phone, message, JSON.stringify(assessmentAnswers), now]
     );
   } else {
     (await getSqliteDb())
       .prepare(
-        `INSERT INTO prospects (id, org_id, service_id, source, full_name, email, phone, message, assessment_answers, status, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,'new',?,?)`
+        `INSERT INTO prospects (id, org_id, service_id, product_service_id, source, full_name, email, phone, message, assessment_answers, status, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,'new',?,?)`
       )
-      .run(id, orgId, serviceId, input.source, input.fullName, email, phone, message, JSON.stringify(assessmentAnswers), now, now);
+      .run(id, orgId, serviceId, productServiceId, input.source, input.fullName, email, phone, message, JSON.stringify(assessmentAnswers), now, now);
   }
 
   return {
     id,
     serviceId,
+    productServiceId,
     source: input.source,
     fullName: input.fullName,
     email,
@@ -206,6 +221,7 @@ export async function promoteProspectToLead(orgId: string, id: string, serviceId
 
   const lead = await createLead(orgId, {
     serviceId,
+    productServiceId: prospect.productServiceId,
     contactName: prospect.fullName,
     contactEmail: prospect.email,
     contactPhone: prospect.phone,

@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
 
   const lead = await createLead(orgId, {
     serviceId: body.serviceId,
+    productServiceId: typeof body.productServiceId === "string" && body.productServiceId ? body.productServiceId : null,
     contactName: body.contactName.trim().slice(0, 200),
     contactEmail: typeof body.contactEmail === "string" ? body.contactEmail.slice(0, 200) : undefined,
     contactPhone: typeof body.contactPhone === "string" ? body.contactPhone.slice(0, 60) : undefined,

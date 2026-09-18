@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { ProspectItem } from "@/components/prospects/ProspectItem";
 import { NewProspectForm } from "@/components/prospects/NewProspectForm";
-import type { Prospect, ServiceOption } from "@/components/prospects/types";
+import type { Prospect, ServiceOption, ProductOption } from "@/components/prospects/types";
 
 // v3.0 roadmap Phase 4 — the staff-facing review queue for everyone who
 // came in through /apply or /assess. Same Active/Closed split shape as
@@ -14,6 +14,7 @@ import type { Prospect, ServiceOption } from "@/components/prospects/types";
 // here.
 export function ProspectsWorkspace() {
   const [services, setServices] = useState<ServiceOption[]>([]);
+  const [products, setProducts] = useState<ProductOption[]>([]);
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -22,10 +23,14 @@ export function ProspectsWorkspace() {
     Promise.all([
       fetch("/api/services", { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
       fetch("/api/prospects", { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
+      // Phase C: best-effort — the product picker is optional, so a
+      // catalog-fetch failure shouldn't block Prospects from loading.
+      fetch("/api/price-catalog", { cache: "no-store" }).then((res) => (res.ok ? res.json() : [])).catch(() => []),
     ])
-      .then(([servicesData, prospectsData]) => {
+      .then(([servicesData, prospectsData, catalogData]) => {
         setServices(servicesData);
         setProspects(prospectsData);
+        setProducts(catalogData);
       })
       .catch(() => setError("Couldn't load prospects — try refreshing."))
       .finally(() => setLoading(false));
@@ -34,6 +39,11 @@ export function ProspectsWorkspace() {
   function serviceName(serviceId: string | null): string | null {
     if (!serviceId) return null;
     return services.find((s) => s.id === serviceId)?.name ?? null;
+  }
+
+  function productName(productServiceId: string | null): string | null {
+    if (!productServiceId) return null;
+    return products.find((p) => p.id === productServiceId)?.name ?? null;
   }
 
   function handleChange(id: string, updated: Partial<Prospect>) {
@@ -49,7 +59,7 @@ export function ProspectsWorkspace() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-6)" }}>
       <Card>
-        <NewProspectForm services={services} onCreated={(p) => setProspects((prev) => [p, ...prev])} />
+        <NewProspectForm services={services} products={products} onCreated={(p) => setProspects((prev) => [p, ...prev])} />
       </Card>
 
       {prospects.length === 0 && (
@@ -72,6 +82,7 @@ export function ProspectsWorkspace() {
                 prospect={p}
                 services={services}
                 serviceName={serviceName(p.serviceId)}
+                productName={productName(p.productServiceId)}
                 onChange={(updated) => handleChange(p.id, updated)}
               />
             ))}
@@ -91,6 +102,7 @@ export function ProspectsWorkspace() {
                 prospect={p}
                 services={services}
                 serviceName={serviceName(p.serviceId)}
+                productName={productName(p.productServiceId)}
                 onChange={(updated) => handleChange(p.id, updated)}
               />
             ))}

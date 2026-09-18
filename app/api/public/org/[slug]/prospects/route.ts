@@ -39,6 +39,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
   const prospect = await createProspect(org.id, {
     serviceId: typeof body.serviceId === "string" && body.serviceId ? body.serviceId : null,
+    productServiceId: typeof body.productServiceId === "string" && body.productServiceId ? body.productServiceId : null,
     source,
     fullName: body.fullName.trim().slice(0, 200),
     email: typeof body.email === "string" ? body.email.trim().slice(0, 200) : undefined,

@@ -3,21 +3,26 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import type { ServiceOption, Class } from "@/components/classes/types";
+import type { ServiceOption, ProductOption, Class } from "@/components/classes/types";
 
 export function NewClassForm({
   services,
+  products,
   onCreated,
 }: {
   services: ServiceOption[];
+  products: ProductOption[];
   onCreated: (cls: Class) => void;
 }) {
   const [serviceId, setServiceId] = useState("");
+  const [productServiceId, setProductServiceId] = useState("");
   const [title, setTitle] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
   const [instructorName, setInstructorName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  const activeProducts = products.filter((p) => p.active);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,6 +34,7 @@ export function NewClassForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           serviceId,
+          productServiceId: productServiceId || undefined,
           title,
           scheduledDate: scheduledDate || undefined,
           instructorName,
@@ -40,6 +46,7 @@ export function NewClassForm({
       }
       const cls: Class = await res.json();
       onCreated(cls);
+      setProductServiceId("");
       setTitle("");
       setScheduledDate("");
       setInstructorName("");
@@ -68,6 +75,21 @@ export function NewClassForm({
           </option>
         ))}
       </select>
+      {activeProducts.length > 0 && (
+        <select
+          value={productServiceId}
+          onChange={(e) => setProductServiceId(e.target.value)}
+          className="v2-input"
+          style={{ maxWidth: 260 }}
+        >
+          <option value="">Product/offering (optional)…</option>
+          {activeProducts.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      )}
       <Input
         placeholder="Class title (e.g. PMP Master Class — Oct cohort)"
         value={title}

@@ -11,6 +11,21 @@ interface PublicService {
   customerNeed: string;
 }
 
+// Phase C (portfolio correction) — the real Products & Services Catalog
+// counterpart to PublicService above. Preferred whenever the org's
+// catalog has active items: a prospect applying to GDC should choose
+// from GDC's actual, sellable offerings, not from the internal Service
+// & Value Architecture's process-step list (Readiness Assessment,
+// Candidate Admission, ...), which is what this form used exclusively
+// before this phase. Falls back to the service list below whenever the
+// catalog is empty, so this form never has nothing to offer.
+interface PublicProduct {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+}
+
 // Shared by /apply and /assess (v3.0 roadmap Phase 4, §6-7) — same
 // contact fields and submit flow either way; "assess" mode adds a
 // short self-assessment questionnaire and tags the resulting prospect
@@ -28,6 +43,7 @@ const ASSESSMENT_QUESTIONS: Array<{ key: string; label: string; type: "select" |
 
 export function ApplyForm({ orgSlug, mode }: { orgSlug: string; mode: "apply" | "assess" }) {
   const [services, setServices] = useState<PublicService[]>([]);
+  const [products, setProducts] = useState<PublicProduct[]>([]);
   const [orgName, setOrgName] = useState("");
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -36,6 +52,7 @@ export function ApplyForm({ orgSlug, mode }: { orgSlug: string; mode: "apply" | 
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [serviceId, setServiceId] = useState("");
+  const [productServiceId, setProductServiceId] = useState("");
   const [message, setMessage] = useState("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
 
@@ -43,21 +60,36 @@ export function ApplyForm({ orgSlug, mode }: { orgSlug: string; mode: "apply" | 
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
 
+  // Phase C: prefer the real catalog once it has active items; fall
+  // back to the internal-service list (this form's original picker)
+  // whenever the catalog is empty, so the form always has something to
+  // offer even before Diallo has entered GDC's full portfolio.
+  const usingProductPicker = products.length > 0;
+
   useEffect(() => {
-    fetch(`/api/public/org/${orgSlug}/services`, { cache: "no-store" })
-      .then((res) => {
+    Promise.all([
+      fetch(`/api/public/org/${orgSlug}/services`, { cache: "no-store" }).then((res) => {
         if (res.status === 404) {
           setNotFound(true);
           return null;
         }
         if (!res.ok) throw new Error("failed");
         return res.json();
-      })
-      .then((data) => {
-        if (!data) return;
-        setOrgName(data.orgName);
-        setServices(data.services);
-        if (data.services.length === 1) setServiceId(data.services[0].id);
+      }),
+      fetch(`/api/public/org/${orgSlug}/products`, { cache: "no-store" })
+        .then((res) => (res.ok ? res.json() : { products: [] }))
+        .catch(() => ({ products: [] })),
+    ])
+      .then(([serviceData, productData]) => {
+        if (!serviceData) return;
+        setOrgName(serviceData.orgName);
+        setServices(serviceData.services);
+        setProducts(productData.products ?? []);
+        if (productData.products?.length === 1) {
+          setProductServiceId(productData.products[0].id);
+        } else if (!productData.products?.length && serviceData.services.length === 1) {
+          setServiceId(serviceData.services[0].id);
+        }
       })
       .catch(() => setError("Couldn't load this page right now — try again shortly."))
       .finally(() => setLoading(false));
@@ -80,6 +112,7 @@ export function ApplyForm({ orgSlug, mode }: { orgSlug: string; mode: "apply" | 
           email,
           phone,
           serviceId: serviceId || undefined,
+          productServiceId: productServiceId || undefined,
           source: mode === "assess" ? "assessment" : "apply",
           message: mode === "apply" ? message : undefined,
           assessmentAnswers: mode === "assess" ? answers : undefined,
@@ -133,27 +166,50 @@ export function ApplyForm({ orgSlug, mode }: { orgSlug: string; mode: "apply" | 
           <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </div>
 
-        {services.length > 0 && (
+        {usingProductPicker ? (
           <div className="v2-public-field">
-            <label htmlFor="serviceId">What are you interested in?</label>
+            <label htmlFor="productServiceId">What are you interested in?</label>
             <select
-              id="serviceId"
+              id="productServiceId"
               className="v2-input"
-              value={serviceId}
-              onChange={(e) => setServiceId(e.target.value)}
+              value={productServiceId}
+              onChange={(e) => setProductServiceId(e.target.value)}
               required
             >
               <option value="">Select one…</option>
-              {services.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
                 </option>
               ))}
             </select>
-            {services.find((s) => s.id === serviceId)?.customerNeed && (
-              <p className="v2-public-hint">{services.find((s) => s.id === serviceId)?.customerNeed}</p>
+            {products.find((p) => p.id === productServiceId)?.description && (
+              <p className="v2-public-hint">{products.find((p) => p.id === productServiceId)?.description}</p>
             )}
           </div>
+        ) : (
+          services.length > 0 && (
+            <div className="v2-public-field">
+              <label htmlFor="serviceId">What are you interested in?</label>
+              <select
+                id="serviceId"
+                className="v2-input"
+                value={serviceId}
+                onChange={(e) => setServiceId(e.target.value)}
+                required
+              >
+                <option value="">Select one…</option>
+                {services.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              {services.find((s) => s.id === serviceId)?.customerNeed && (
+                <p className="v2-public-hint">{services.find((s) => s.id === serviceId)?.customerNeed}</p>
+              )}
+            </div>
+          )
         )}
 
         {mode === "apply" && (

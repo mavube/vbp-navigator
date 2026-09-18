@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
-import type { Customer, Engagement, ServiceOption } from "@/components/customers/types";
+import type { Customer, Engagement, ServiceOption, ProductOption } from "@/components/customers/types";
 
 const ENGAGEMENT_TONE: Record<string, "accent" | "success" | "neutral"> = {
   active: "accent",
@@ -22,12 +22,14 @@ export function CustomerItem({
   customer,
   engagements,
   services,
+  products,
   highlighted,
   onUpdated,
 }: {
   customer: Customer;
   engagements: Engagement[];
   services: ServiceOption[];
+  products: ProductOption[];
   highlighted: boolean;
   onUpdated: (patch: Partial<Customer>) => void;
 }) {
@@ -41,6 +43,11 @@ export function CustomerItem({
 
   function serviceName(serviceId: string): string {
     return services.find((s) => s.id === serviceId)?.name ?? "Unknown service";
+  }
+
+  function productName(productServiceId: string | null): string | null {
+    if (!productServiceId) return null;
+    return products.find((p) => p.id === productServiceId)?.name ?? null;
   }
 
   async function save() {
@@ -135,7 +142,7 @@ export function CustomerItem({
           {theirEngagements.map((e) => (
             <div key={e.id} style={{ display: "flex", alignItems: "center", gap: "var(--v2-space-2)", fontSize: "0.85rem" }}>
               <Badge tone={ENGAGEMENT_TONE[e.status] ?? "neutral"}>{e.status}</Badge>
-              <span>{serviceName(e.serviceId)}</span>
+              <span>{productName(e.productServiceId) ?? serviceName(e.serviceId)}</span>
               <span style={{ color: "var(--v2-text-faint)", fontSize: "0.75rem" }}>
                 since {new Date(e.startedAt).toLocaleDateString()}
               </span>
