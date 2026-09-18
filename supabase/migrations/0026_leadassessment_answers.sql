@@ -1,0 +1,17 @@
+-- Track 2 follow-up (post Phase G) — Diallo's "smart Lead profile" ask:
+-- "if I view a Lead who came in via the assessment... I'd wish to see
+-- the lead's assessment score, what drives them, what challenges
+-- they're facing." That data is already captured at public intake —
+-- prospects.assessment_answers (0012_phase4_customer_engagement.sql) —
+-- but lib/db-prospects.ts's promoteProspectToLead never carried it
+-- across to the Lead it creates, so it was silently dropped the moment
+-- a prospect got promoted. This is the fix: give leads the same column,
+-- same shape, same default, so the value can simply be copied over.
+--
+-- Nullable-safe additive pattern, same as Phase C's product_service_id
+-- (0023_phasec_product_service_anchor.sql): existing leads get the
+-- column's default ('{}'), nothing is backfilled, no code path
+-- requires it, and a lead with no assessment answers (i.e. every lead
+-- not created via prospect promotion from /assess) behaves exactly as
+-- it did before this migration.
+alter table leads add column if not exists assessment_answers jsonb not null default '{}';

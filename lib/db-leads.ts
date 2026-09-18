@@ -31,6 +31,13 @@ export interface LeadRow {
   stage: LeadStage;
   ownerId: string | null;
   notes: string;
+  // Post-Phase-G fix — carried over from Prospect.assessmentAnswers
+  // (lib/db-prospects.ts) when a lead is created by promoting a
+  // prospect who came in via the public /assess intake. Empty object
+  // for every other lead (staff-logged, or promoted from a plain
+  // /apply prospect with no assessment). See
+  // supabase/migrations/0026_leadassessment_answers.sql.
+  assessmentAnswers: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,6 +49,7 @@ export interface NewLead {
   contactEmail?: string;
   contactPhone?: string;
   notes?: string;
+  assessmentAnswers?: Record<string, unknown>;
 }
 
 let schemaReady: Promise<void> | null = null;
@@ -71,6 +79,7 @@ function ensureSchema(): Promise<void> {
         (db.prepare(`PRAGMA table_info(leads)`).all() as Array<{ name: string }>).map((c) => c.name)
       );
       if (!cols.has("product_service_id")) db.exec(`ALTER TABLE leads ADD COLUMN product_service_id TEXT`);
+      if (!cols.has("assessment_answers")) db.exec(`ALTER TABLE leads ADD COLUMN assessment_answers TEXT NOT NULL DEFAULT '{}'`);
     })();
   }
   return schemaReady;
@@ -87,6 +96,7 @@ function fromSqliteRow(row: Record<string, unknown>): LeadRow {
     stage: row.stage as LeadStage,
     ownerId: (row.owner_id as string) ?? null,
     notes: row.notes as string,
+    assessmentAnswers: JSON.parse((row.assessment_answers as string) || "{}"),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
@@ -95,6 +105,7 @@ function fromSqliteRow(row: Record<string, unknown>): LeadRow {
 const PG_COLS = `id, service_id AS "serviceId", product_service_id AS "productServiceId",
                     contact_name AS "contactName", contact_email AS "contactEmail",
                     contact_phone AS "contactPhone", stage, owner_id AS "ownerId", notes,
+                    assessment_answers AS "assessmentAnswers",
                     created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 export async function listLeads(orgId: string, serviceId?: string): Promise<LeadRow[]> {
@@ -126,20 +137,21 @@ export async function createLead(orgId: string, input: NewLead): Promise<LeadRow
   const contactPhone = input.contactPhone ?? "";
   const notes = input.notes ?? "";
   const productServiceId = input.productServiceId ?? null;
+  const assessmentAnswers = input.assessmentAnswers ?? {};
 
   if (IS_POSTGRES) {
     await (await getPgPool()).query(
-      `INSERT INTO leads (id, org_id, service_id, product_service_id, contact_name, contact_email, contact_phone, stage, notes, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'new',$8,$9,$9)`,
-      [id, orgId, input.serviceId, productServiceId, input.contactName, contactEmail, contactPhone, notes, now]
+      `INSERT INTO leads (id, org_id, service_id, product_service_id, contact_name, contact_email, contact_phone, stage, notes, assessment_answers, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'new',$8,$9,$10,$10)`,
+      [id, orgId, input.serviceId, productServiceId, input.contactName, contactEmail, contactPhone, notes, JSON.stringify(assessmentAnswers), now]
     );
   } else {
     (await getSqliteDb())
       .prepare(
-        `INSERT INTO leads (id, org_id, service_id, product_service_id, contact_name, contact_email, contact_phone, stage, notes, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,'new',?,?,?)`
+        `INSERT INTO leads (id, org_id, service_id, product_service_id, contact_name, contact_email, contact_phone, stage, notes, assessment_answers, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,'new',?,?,?,?)`
       )
-      .run(id, orgId, input.serviceId, productServiceId, input.contactName, contactEmail, contactPhone, notes, now, now);
+      .run(id, orgId, input.serviceId, productServiceId, input.contactName, contactEmail, contactPhone, notes, JSON.stringify(assessmentAnswers), now, now);
   }
 
   return {
@@ -152,6 +164,7 @@ export async function createLead(orgId: string, input: NewLead): Promise<LeadRow
     stage: "new",
     ownerId: null,
     notes,
+    assessmentAnswers,
     createdAt: now,
     updatedAt: now,
   };

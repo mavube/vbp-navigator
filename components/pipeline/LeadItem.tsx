@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
 import { CommentThread } from "@/components/collaboration/CommentThread";
 import type { Lead, LeadStage } from "@/components/pipeline/types";
+import { ASSESSMENT_QUESTIONS } from "@/lib/assessment-questions";
 
 const STAGE_ORDER: LeadStage[] = ["new", "contacted", "qualified", "won"];
 const STAGE_TONE: Record<LeadStage, "neutral" | "accent" | "success" | "danger"> = {
@@ -63,6 +64,20 @@ export function LeadItem({
 
   const nextStage = lead.stage === "lost" ? null : STAGE_ORDER[STAGE_ORDER.indexOf(lead.stage) + 1];
 
+  // Post-Phase-G fix (Diallo: "if I view a Lead who came in via the
+  // assessment... I'd wish to see the lead's assessment score, what
+  // drives them, what challenges they're facing... real talking points
+  // for a sales follow-up call"). Rendered from ASSESSMENT_QUESTIONS
+  // (the same list /assess itself asks from) rather than raw object
+  // keys, so this reads as "Years of experience: 3–5 years," not
+  // "experience: 3-5 years" — and in the order the questions were
+  // actually asked, not object-key order. Empty for any lead not
+  // promoted from an /assess prospect (assessmentAnswers is then {}).
+  const assessmentEntries = ASSESSMENT_QUESTIONS.map((q) => ({
+    label: q.label,
+    value: lead.assessmentAnswers?.[q.key],
+  })).filter((e) => e.value !== undefined && e.value !== null && e.value !== "");
+
   return (
     <Card style={{ padding: "var(--v2-space-4)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--v2-space-3)", flexWrap: "wrap" }}>
@@ -112,6 +127,30 @@ export function LeadItem({
           )}
         </div>
       </div>
+      {assessmentEntries.length > 0 && (
+        <div
+          style={{
+            marginTop: "var(--v2-space-3)",
+            padding: "var(--v2-space-3)",
+            background: "var(--v2-surface-sunken)",
+            border: "1px solid var(--v2-border)",
+            borderRadius: "var(--v2-radius, 8px)",
+          }}
+        >
+          <div style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: "var(--v2-text-faint)", marginBottom: 6 }}>
+            Assessment — for the follow-up call
+          </div>
+          <div style={{ display: "grid", gap: 4 }}>
+            {assessmentEntries.map(({ label, value }) => (
+              <div key={label} style={{ fontSize: "0.82rem" }}>
+                <span style={{ color: "var(--v2-text-muted)" }}>{label}: </span>
+                <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{String(value)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {error && <p style={{ color: "var(--v2-danger)", fontSize: "0.8rem", margin: "8px 0 0" }}>{error}</p>}
 
       {/* v3.0 Phase 4: winning a lead also creates a Customer +

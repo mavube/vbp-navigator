@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { ASSESSMENT_QUESTIONS } from "@/lib/assessment-questions";
 
 interface PublicService {
   id: string;
@@ -28,19 +29,11 @@ interface PublicProduct {
 
 // Shared by /apply and /assess (v3.0 roadmap Phase 4, §6-7) — same
 // contact fields and submit flow either way; "assess" mode adds a
-// short self-assessment questionnaire and tags the resulting prospect
-// source: "assessment" so staff reviewing /prospects can tell the two
-// apart. These questions are VBP's own intake questionnaire, not a
-// reproduction of PMI's actual PMP certification eligibility criteria
-// (which this app has no source for) — framed that way on the page
-// itself so nobody mistakes it for an official eligibility check.
-const ASSESSMENT_QUESTIONS: Array<{ key: string; label: string; type: "select" | "text"; options?: string[] }> = [
-  { key: "experience", label: "Years of project-related work experience", type: "select", options: ["Less than 1 year", "1–3 years", "3–5 years", "5+ years"] },
-  { key: "certification", label: "Do you currently hold a related certification or qualification?", type: "select", options: ["No", "Yes — in progress", "Yes — completed"] },
-  { key: "timing", label: "Preferred start timing", type: "select", options: ["As soon as possible", "Next quarter", "Just exploring for now"] },
-  { key: "motivation", label: "What's prompting you to pursue this now?", type: "text" },
-];
-
+// short self-assessment questionnaire (ASSESSMENT_QUESTIONS, now in
+// lib/assessment-questions.ts — also read by components/pipeline/
+// LeadItem.tsx, see that module's own comment) and tags the resulting
+// prospect source: "assessment" so staff reviewing /prospects can tell
+// the two apart.
 export function ApplyForm({ orgSlug, mode }: { orgSlug: string; mode: "apply" | "assess" }) {
   const [services, setServices] = useState<PublicService[]>([]);
   const [products, setProducts] = useState<PublicProduct[]>([]);

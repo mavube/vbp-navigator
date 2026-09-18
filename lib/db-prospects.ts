@@ -226,6 +226,12 @@ export async function promoteProspectToLead(orgId: string, id: string, serviceId
     contactEmail: prospect.email,
     contactPhone: prospect.phone,
     notes: prospect.message || (prospect.source === "assessment" ? "From the PMP Readiness Assessment intake." : "From the public application form."),
+    // Post-Phase-G fix — this used to be silently dropped here, the
+    // exact bug behind Diallo's "I want to see the lead's assessment
+    // score / what drives them" ask: the data was captured at /assess
+    // intake but never made it past promotion. Carried through as-is;
+    // an empty object for prospects with no assessment (plain /apply).
+    assessmentAnswers: prospect.assessmentAnswers,
   });
 
   await updateProspectStatus(orgId, id, "promoted", lead.id);

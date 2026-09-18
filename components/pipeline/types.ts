@@ -29,4 +29,8 @@ export interface Lead {
   stage: LeadStage;
   ownerId: string | null;
   notes: string;
+  // Post-Phase-G fix — see lib/db-leads.ts's LeadRow for the full
+  // reasoning. Empty object for any lead not promoted from an
+  // /assess prospect.
+  assessmentAnswers: Record<string, unknown>;
 }
