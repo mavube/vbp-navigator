@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Section } from "@/components/ui/Section";
 import { NewCommercialDocumentForm } from "@/components/commercial/NewCommercialDocumentForm";
 import { CommercialDocumentItem } from "@/components/commercial/CommercialDocumentItem";
-import type { CommercialDocument, ServiceOption, LeadOption, EngagementOption, CustomerOption } from "@/components/commercial/types";
+import type { CommercialDocument, ServiceOption, LeadOption, EngagementOption, CustomerOption, PriceCatalogItemOption } from "@/components/commercial/types";
 
 export function CommercialDocsWorkspace() {
   const [services, setServices] = useState<ServiceOption[]>([]);
@@ -12,6 +12,9 @@ export function CommercialDocsWorkspace() {
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [engagements, setEngagements] = useState<EngagementOption[]>([]);
   const [documents, setDocuments] = useState<CommercialDocument[]>([]);
+  const [catalogItems, setCatalogItems] = useState<PriceCatalogItemOption[]>([]);
+  const [orgVatRate, setOrgVatRate] = useState(0);
+  const [defaultCurrency, setDefaultCurrency] = useState("TZS");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -21,13 +24,18 @@ export function CommercialDocsWorkspace() {
       fetch("/api/leads", { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
       fetch("/api/customers", { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
       fetch("/api/commercial-documents", { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
+      fetch("/api/price-catalog", { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
+      fetch("/api/org-settings", { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
     ])
-      .then(([servicesData, leadsData, customersData, documentsData]) => {
+      .then(([servicesData, leadsData, customersData, documentsData, catalogData, orgSettings]) => {
         setServices(servicesData);
         setLeads(leadsData);
         setCustomers(customersData.customers);
         setEngagements(customersData.engagements);
         setDocuments(documentsData);
+        setCatalogItems(catalogData);
+        setOrgVatRate(orgSettings.vatRegistered ? orgSettings.vatRate : 0);
+        setDefaultCurrency(orgSettings.defaultCurrency || "TZS");
         setError("");
       })
       .catch(() => setError("Couldn't load Commercial Docs — try refreshing."))
@@ -51,7 +59,16 @@ export function CommercialDocsWorkspace() {
         title="Create a document"
         description="A Proposal, Quotation, or Invoice — each can stand on its own (no prior document needed) or be converted from one that's already approved, inheriting its details instead of re-typing them."
       >
-        <NewCommercialDocumentForm services={services} leads={leads} engagements={engagements} customers={customers} onCreated={replace} />
+        <NewCommercialDocumentForm
+          services={services}
+          leads={leads}
+          engagements={engagements}
+          customers={customers}
+          catalogItems={catalogItems}
+          orgVatRate={orgVatRate}
+          defaultCurrency={defaultCurrency}
+          onCreated={replace}
+        />
       </Section>
 
       <Section title={`In progress (${inProgress.length})`} description="Drafts, documents under review, and anything rejected and waiting to be reopened.">

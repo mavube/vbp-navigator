@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getDocument, advanceDocumentStatus, recordDpoToken } from "@/lib/db-documents";
+import { getOrgSettings } from "@/lib/db-org-settings";
 import { isDpoConfigured, createDpoToken } from "@/lib/dpo";
 import { getUserContext, canManageService, resolveDisplayName } from "@/lib/permissions";
 
@@ -47,13 +48,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const documentNumber = `${DOC_PREFIX[doc.docType] ?? "DOC"}-${monthKey()}-${randomBytes(3).toString("hex").toUpperCase()}`;
   const accessToken = randomBytes(24).toString("hex");
 
+  // Phase 15 fix: the amount DPO charges must be the same total the
+  // customer sees on the PDF/e-invoice page ("Total Due" = subtotal +
+  // tax) — never just the tax-exclusive subtotal. Same per-item tax
+  // computation as lib/pdf-commercial.ts and app/invoice/[token]/page.tsx.
+  const subtotal = doc.amount ?? doc.lineItems.reduce((sum, i) => sum + i.quantity * i.unitAmount, 0);
+  let totalDue = subtotal;
+  if (doc.docType === "invoice" && subtotal > 0) {
+    if (doc.lineItems.length > 0) {
+      const taxTotal = doc.lineItems.reduce((sum, i) => sum + i.quantity * i.unitAmount * ((i.taxRate ?? 0) / 100), 0);
+      totalDue = subtotal + taxTotal;
+    } else {
+      const orgSettings = await getOrgSettings(ctx.orgId);
+      totalDue = orgSettings.vatRegistered ? subtotal * (1 + orgSettings.vatRate / 100) : subtotal;
+    }
+  }
+
   let dpoWarning: string | null = null;
-  if (doc.docType === "invoice" && doc.amount && doc.amount > 0) {
+  if (doc.docType === "invoice" && totalDue > 0) {
     if (isDpoConfigured()) {
       try {
         const origin = new URL(req.url).origin;
         const result = await createDpoToken({
-          amount: doc.amount,
+          amount: totalDue,
           currency: doc.currency,
           companyRef: doc.id,
           redirectUrl: `${origin}/invoice/${accessToken}/return`,

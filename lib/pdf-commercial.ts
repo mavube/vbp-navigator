@@ -178,18 +178,27 @@ export async function renderCommercialDocumentPdf(
     y -= 18;
   }
 
-  // Totals
+  // Totals. Phase 15: tax is computed per line item — each item's
+  // unitAmount is always tax-exclusive, and its taxRate was snapshotted
+  // at selection time (see lib/db-price-catalog.ts and
+  // lib/db-documents.ts's DocumentLineItem comment). A document with no
+  // line items at all (a flat headline amount, e.g. a quick phone-order
+  // invoice with no itemization) falls back to the org's current VAT
+  // rate applied once — the same behavior this PDF always had — since
+  // there's nothing itemized to carry a per-item rate.
   const subtotal = doc.amount ?? doc.lineItems.reduce((sum, i) => sum + i.quantity * i.unitAmount, 0);
-  const vatAmount = orgSettings.vatRegistered ? subtotal * (orgSettings.vatRate / 100) : 0;
-  const total = subtotal + vatAmount;
+  const taxAmount = doc.lineItems.length > 0
+    ? doc.lineItems.reduce((sum, i) => sum + i.quantity * i.unitAmount * ((i.taxRate ?? 0) / 100), 0)
+    : (orgSettings.vatRegistered ? subtotal * (orgSettings.vatRate / 100) : 0);
+  const total = subtotal + taxAmount;
 
   const totalsX = width - margin - 160;
   page.drawText("Subtotal", { x: totalsX, y, size: 10, font });
   page.drawText(fmtMoney(subtotal, doc.currency), { x: width - margin - font.widthOfTextAtSize(fmtMoney(subtotal, doc.currency), 10), y, size: 10, font });
   y -= 14;
-  if (orgSettings.vatRegistered) {
-    page.drawText(`VAT (${orgSettings.vatRate}%)`, { x: totalsX, y, size: 10, font });
-    page.drawText(fmtMoney(vatAmount, doc.currency), { x: width - margin - font.widthOfTextAtSize(fmtMoney(vatAmount, doc.currency), 10), y, size: 10, font });
+  if (taxAmount > 0) {
+    page.drawText("Tax", { x: totalsX, y, size: 10, font });
+    page.drawText(fmtMoney(taxAmount, doc.currency), { x: width - margin - font.widthOfTextAtSize(fmtMoney(taxAmount, doc.currency), 10), y, size: 10, font });
     y -= 14;
   }
   page.drawText("Total Due", { x: totalsX, y, size: 12, font: fontBold });

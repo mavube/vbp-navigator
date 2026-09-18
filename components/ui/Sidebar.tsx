@@ -21,6 +21,7 @@ import {
   IconMemory,
   IconMenu,
   IconPipeline,
+  IconPriceCatalog,
   IconProspects,
   IconRequests,
   IconSettings,
@@ -45,6 +46,7 @@ const NAV_ICONS: Record<string, (props: { className?: string }) => JSX.Element> 
   "/documents": IconDocuments,
   "/commercial": IconCommercial,
   "/settings/company": IconSettings,
+  "/settings/price-catalog": IconPriceCatalog,
 };
 
 type NavGroup = { label: string; links: NavLinkMeta[] };
@@ -64,6 +66,28 @@ const COLLAPSE_KEY = "vbp-sidebar-collapsed";
 interface Badges {
   tasksOverdue: number;
   blockersHighImpactOpen: number;
+}
+
+// Phase 15 — Diallo has placed the ValueBlueprint mark at
+// public/ValueBlueprint-logo.png in the repo. This renders it when
+// present and falls back to the plain "VBP Navigator" text brand on
+// load failure (file missing, wrong name) — same graceful-fallback
+// pattern lib/pdf-commercial.ts already uses for the GDC logo, so
+// nothing breaks if the file isn't there yet.
+function BrandMark({ collapsed }: { collapsed: boolean }) {
+  const [logoFailed, setLogoFailed] = useState(false);
+  if (logoFailed) {
+    return collapsed ? <>VBP</> : <>VBP <span>Navigator</span></>;
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/ValueBlueprint-logo.png"
+      alt="VBP Navigator"
+      onError={() => setLogoFailed(true)}
+      style={{ height: collapsed ? 24 : 28, maxWidth: collapsed ? 32 : 160, objectFit: "contain" }}
+    />
+  );
 }
 
 function NavContent({
@@ -90,7 +114,7 @@ function NavContent({
           onNavigate();
         }}
       >
-        {collapsed ? "VBP" : <>VBP <span>Navigator</span></>}
+        <BrandMark collapsed={collapsed} />
       </Link>
       <nav className="v2-sidebar-nav">
         {GROUPS.map((group) => (

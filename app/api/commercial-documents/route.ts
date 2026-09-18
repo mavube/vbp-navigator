@@ -3,6 +3,7 @@ import { listDocumentsByTypes, createDocument, getDocument, type DocumentLineIte
 import { resolveCommercialAnchor } from "@/lib/document-context";
 import { renderDocument, COMMERCIAL_TYPES, type DocumentType } from "@/lib/document-templates";
 import { getOrgName } from "@/lib/organizations";
+import { listServices } from "@/lib/db-services";
 import { getUserContext, canManageService, resolveDisplayName } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,11 @@ export const dynamic = "force-dynamic";
 const VALID_TYPES: DocumentType[] = ["proposal", "quotation", "invoice"];
 const MAX_LINE_ITEMS = 30;
 
+// Phase 15: a line item may now carry catalogItemId (which
+// lib/db-price-catalog.ts item it was selected from, or null for a
+// hand-typed custom line) and taxRate (the percentage snapshotted at
+// selection time) — both optional so a pre-Phase-15 document's items,
+// which have neither, still round-trip unchanged.
 function parseLineItems(body: unknown): DocumentLineItem[] {
   if (!Array.isArray(body)) return [];
   const items: DocumentLineItem[] = [];
@@ -20,9 +26,19 @@ function parseLineItems(body: unknown): DocumentLineItem[] {
     const quantity = Number(rawItem.quantity);
     const unitAmount = Number(rawItem.unitAmount);
     if (!description || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitAmount) || unitAmount < 0) continue;
-    items.push({ description, quantity, unitAmount });
+    const catalogItemId = typeof rawItem.catalogItemId === "string" && rawItem.catalogItemId ? rawItem.catalogItemId : null;
+    const rawTaxRate = rawItem.taxRate;
+    const taxRate = rawTaxRate === null || rawTaxRate === undefined
+      ? null
+      : (Number.isFinite(Number(rawTaxRate)) ? Math.max(0, Math.min(100, Number(rawTaxRate))) : null);
+    items.push({ description, quantity, unitAmount, catalogItemId, taxRate });
   }
   return items;
+}
+
+async function serviceNameFor(orgId: string, serviceId: string): Promise<string> {
+  const services = await listServices(orgId);
+  return services.find((s) => s.id === serviceId)?.name ?? "";
 }
 
 // GET /api/commercial-documents — proposals, quotations, and invoices
@@ -44,13 +60,27 @@ export async function GET() {
 //   Diallo's own requirement for — "not every transaction starts with
 //   a proposal... some start directly with an invoice").
 //
-//   Converted: parentDocumentId + docType (must differ from the
-//   parent's own type) — inherits service/lead/engagement/customer/
-//   recipient/line items/amount/currency/due date from the parent
-//   rather than re-typing them ("field inheritance, not duplicate
-//   entry"), and only a document that's actually reached 'approved' or
-//   further can be converted from — converting a still-editable draft
-//   makes no sense (there's nothing final to inherit yet).
+//   Converted: parentDocumentId + docType — inherits service/lead/
+//   engagement/customer/recipient/line items/amount/currency/due date
+//   from the parent rather than re-typing them ("field inheritance, not
+//   duplicate entry"), and only a document that's actually reached
+//   'approved' or further can be converted from — converting a
+//   still-editable draft makes no sense (there's nothing final to
+//   inherit yet). Phase 15 correction: the ONLY allowed conversion pair
+//   is Quotation -> Invoice. A Proposal can no longer convert directly
+//   into a Quotation or an Invoice via this mechanism — Diallo: "a
+//   proposal normally have more text/details and clarifications,"
+//   which doesn't map onto an Invoice's structured line items the way
+//   a Quotation's already-structured items do. See fromAcceptedProposalId
+//   below for a Proposal's actual path to an Invoice.
+//
+//   From an accepted Proposal: fromAcceptedProposalId + docType must be
+//   "invoice" — the proposal must already be marked accepted (see
+//   PATCH .../[id] action "mark_accepted"). Inherits the anchor
+//   (service/lead/engagement/customer) and recipient/currency, but
+//   deliberately NOT the proposal's line items or amount — a Proposal's
+//   content is prose, not a priced breakdown, so the new Invoice starts
+//   with an empty, catalog-driven line-item list for staff to fill in.
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
 
@@ -68,6 +98,49 @@ export async function POST(req: NextRequest) {
   const dueDate = typeof body.dueDate === "string" && body.dueDate ? body.dueDate : null;
 
   const parentDocumentId = typeof body.parentDocumentId === "string" && body.parentDocumentId ? body.parentDocumentId : null;
+  const fromAcceptedProposalId = typeof body.fromAcceptedProposalId === "string" && body.fromAcceptedProposalId ? body.fromAcceptedProposalId : null;
+
+  if (fromAcceptedProposalId) {
+    if (docType !== "invoice") {
+      return NextResponse.json({ error: "An accepted Proposal can only create an Invoice" }, { status: 400 });
+    }
+    const proposal = await getDocument(ctx.orgId, fromAcceptedProposalId);
+    if (!proposal) return NextResponse.json({ error: "Proposal not found" }, { status: 404 });
+    if (proposal.docType !== "proposal") {
+      return NextResponse.json({ error: "This path is only for a Proposal" }, { status: 400 });
+    }
+    if (!proposal.acceptedAt) {
+      return NextResponse.json({ error: "Mark this Proposal accepted first" }, { status: 400 });
+    }
+    if (!canManageService(ctx, proposal.serviceId)) {
+      return NextResponse.json({ error: "Not allowed to create documents for this service" }, { status: 403 });
+    }
+
+    const rendered = renderDocument("invoice", {
+      orgName, serviceName: await serviceNameFor(ctx.orgId, proposal.serviceId), serviceDescription: "", customerNeed: "",
+      recipientName: proposal.recipientName, details: proposal.details,
+    });
+    const createdByName = await resolveDisplayName(ctx, typeof body.createdByName === "string" ? body.createdByName : undefined);
+    const doc = await createDocument(ctx.orgId, {
+      serviceId: proposal.serviceId,
+      leadId: proposal.leadId,
+      engagementId: proposal.engagementId,
+      customerId: proposal.customerId,
+      docType: "invoice",
+      title: rendered.title,
+      body: rendered.body,
+      details: proposal.details,
+      recipientName: proposal.recipientName,
+      recipientEmail: proposal.recipientEmail,
+      createdByName,
+      parentDocumentId: proposal.id,
+      amount: null,
+      currency: proposal.currency,
+      lineItems: [],
+      dueDate: null,
+    });
+    return NextResponse.json(doc, { status: 201 });
+  }
 
   if (parentDocumentId) {
     const parent = await getDocument(ctx.orgId, parentDocumentId);
@@ -78,15 +151,18 @@ export async function POST(req: NextRequest) {
     if (!["approved", "issued", "sent", "delivered", "acknowledged"].includes(parent.status)) {
       return NextResponse.json({ error: "Only an approved (or further-along) document can be converted" }, { status: 400 });
     }
-    if (parent.docType === docType) {
-      return NextResponse.json({ error: "Converting to the same document type doesn't make sense" }, { status: 400 });
+    if (!(parent.docType === "quotation" && docType === "invoice")) {
+      return NextResponse.json(
+        { error: "Only a Quotation can be converted to an Invoice. A Proposal can't convert directly — mark it accepted, then create an Invoice from it." },
+        { status: 400 }
+      );
     }
     if (!canManageService(ctx, parent.serviceId)) {
       return NextResponse.json({ error: "Not allowed to convert documents for this service" }, { status: 403 });
     }
 
     const rendered = renderDocument(docType, {
-      orgName, serviceName: "", serviceDescription: "", customerNeed: "",
+      orgName, serviceName: await serviceNameFor(ctx.orgId, parent.serviceId), serviceDescription: "", customerNeed: "",
       recipientName: parent.recipientName, details: parent.details,
     });
     const createdByName = await resolveDisplayName(ctx, typeof body.createdByName === "string" ? body.createdByName : undefined);

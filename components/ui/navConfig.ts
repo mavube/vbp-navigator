@@ -30,6 +30,7 @@ export const NAV_LINKS: NavLinkMeta[] = [
   { href: "/documents", label: "Documents", group: "Growth" },
   { href: "/commercial", label: "Commercial Docs", group: "Growth" },
   { href: "/settings/company", label: "Company Settings", group: "Overview" },
+  { href: "/settings/price-catalog", label: "Price Catalog", group: "Overview" },
 ];
 
 export const NAV_GROUP_ORDER = ["Overview", "Delivery", "Finance", "Growth"];

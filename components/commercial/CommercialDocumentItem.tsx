@@ -28,16 +28,23 @@ const STATUS_TONE: Record<CommercialStatus, "neutral" | "accent" | "success" | "
   acknowledged: "success",
 };
 
-// Which document type a given one can be converted INTO — a Proposal
-// can become a Quotation or go straight to Invoice; a Quotation can
-// become an Invoice; an Invoice is the end of the chain.
+// Which document type a given one can be converted INTO via the
+// generic mechanism. Phase 15 correction (Diallo's "case 1"): a
+// Proposal can no longer convert directly into anything — its prose
+// content doesn't map onto structured line items the way a Quotation's
+// already-structured items do. Only a Quotation converts to an
+// Invoice. A Proposal's own path to an Invoice is "Mark accepted" then
+// "Create Invoice from Proposal", below — a different action, not this
+// generic selector.
 const CONVERT_TARGETS: Record<CommercialDocType, CommercialDocType[]> = {
-  proposal: ["quotation", "invoice"],
+  proposal: [],
   quotation: ["invoice"],
   invoice: [],
 };
 
-type ActionName = "submit" | "approve" | "reject" | "reopen" | "mark_acknowledged" | "issue" | "send" | "convert";
+type ActionName =
+  | "submit" | "approve" | "reject" | "reopen" | "mark_acknowledged" | "issue" | "send" | "convert"
+  | "mark_accepted" | "invoice_from_proposal";
 
 export function CommercialDocumentItem({
   doc,
@@ -90,8 +97,18 @@ export function CommercialDocumentItem({
     const data = await call("/api/commercial-documents", { parentDocumentId: doc.id, docType: convertTo }, "convert");
     if (data) onConverted(data as unknown as CommercialDocument);
   }
+  async function markAccepted() {
+    const data = await call(`/api/commercial-documents/${doc.id}`, { action: "mark_accepted" }, "mark_accepted");
+    if (data) onChange(data as unknown as CommercialDocument);
+  }
+  async function invoiceFromProposal() {
+    const data = await call("/api/commercial-documents", { fromAcceptedProposalId: doc.id, docType: "invoice" }, "invoice_from_proposal");
+    if (data) onConverted(data as unknown as CommercialDocument);
+  }
 
-  const total = doc.amount ?? doc.lineItems.reduce((sum, i) => sum + i.quantity * i.unitAmount, 0);
+  const subtotal = doc.amount ?? doc.lineItems.reduce((sum, i) => sum + i.quantity * i.unitAmount, 0);
+  const taxTotal = doc.lineItems.reduce((sum, i) => sum + i.quantity * i.unitAmount * ((i.taxRate ?? 0) / 100), 0);
+  const total = subtotal + taxTotal;
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -127,13 +144,20 @@ export function CommercialDocumentItem({
           {doc.lineItems.length > 0 && (
             <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
               <tbody>
-                {doc.lineItems.map((item, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid var(--v2-border)" }}>
-                    <td style={{ padding: "4px 0" }}>{item.description}</td>
-                    <td style={{ padding: "4px 8px", textAlign: "right" }}>{item.quantity} × {doc.currency} {item.unitAmount.toLocaleString()}</td>
-                    <td style={{ padding: "4px 0", textAlign: "right" }}>{doc.currency} {(item.quantity * item.unitAmount).toLocaleString()}</td>
-                  </tr>
-                ))}
+                {doc.lineItems.map((item, i) => {
+                  const lineSubtotal = item.quantity * item.unitAmount;
+                  const lineTax = lineSubtotal * ((item.taxRate ?? 0) / 100);
+                  return (
+                    <tr key={i} style={{ borderBottom: "1px solid var(--v2-border)" }}>
+                      <td style={{ padding: "4px 0" }}>{item.description}</td>
+                      <td style={{ padding: "4px 8px", textAlign: "right" }}>{item.quantity} × {doc.currency} {item.unitAmount.toLocaleString()}</td>
+                      <td style={{ padding: "4px 8px", textAlign: "right", color: "var(--v2-text-faint)" }}>
+                        {item.taxRate ? `+${item.taxRate}% tax` : "no tax"}
+                      </td>
+                      <td style={{ padding: "4px 0", textAlign: "right" }}>{doc.currency} {(lineSubtotal + lineTax).toLocaleString()}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -180,6 +204,12 @@ export function CommercialDocumentItem({
         {["sent", "delivered"].includes(doc.status) && doc.docType !== "invoice" && (
           <ActionButton label="Mark acknowledged" busyLabel="Marking…" busy={pending === "mark_acknowledged"} disabled={busy} onClick={() => lifecycle("mark_acknowledged", "mark_acknowledged")} />
         )}
+        {doc.docType === "proposal" && !doc.acceptedAt && ["approved", "issued", "sent", "delivered"].includes(doc.status) && (
+          <ActionButton label="Mark accepted" busyLabel="Marking…" busy={pending === "mark_accepted"} disabled={busy} onClick={markAccepted} />
+        )}
+        {doc.docType === "proposal" && doc.acceptedAt && (
+          <ActionButton label="Create Invoice from Proposal" busyLabel="Creating…" busy={pending === "invoice_from_proposal"} disabled={busy} onClick={invoiceFromProposal} primary />
+        )}
         {CONVERT_TARGETS[doc.docType].length > 0 && ["approved", "issued", "sent", "delivered", "acknowledged"].includes(doc.status) && (
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <select value={convertTo} onChange={(e) => setConvertTo(e.target.value as CommercialDocType)} className="v2-input" style={{ padding: "4px 8px", fontSize: "0.75rem" }}>
@@ -195,6 +225,11 @@ export function CommercialDocumentItem({
       </div>
 
       {doc.createdByName && <p style={{ fontSize: "0.75rem", color: "var(--v2-text-faint)", margin: "8px 0 0" }}>Created by {doc.createdByName}</p>}
+      {doc.acceptedAt && (
+        <p style={{ fontSize: "0.75rem", color: "#166534", margin: "4px 0 0" }}>
+          Accepted {new Date(doc.acceptedAt).toLocaleDateString()}{doc.acceptedByName ? ` (by ${doc.acceptedByName})` : ""}
+        </p>
+      )}
       {warning && <p style={{ color: "#92400e", fontSize: "0.8rem", margin: "8px 0 0" }}>{warning}</p>}
       {error && <p style={{ color: "var(--v2-danger)", fontSize: "0.8rem", margin: "8px 0 0" }}>{error}</p>}
     </Card>

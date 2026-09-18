@@ -3,14 +3,16 @@ import {
   getDocument,
   updateCommercialContent,
   advanceDocumentStatus,
+  markProposalAccepted,
   type DocumentLineItem,
   type DocumentStatus,
 } from "@/lib/db-documents";
-import { getUserContext, canManageService, canApproveBudget } from "@/lib/permissions";
+import { getUserContext, canManageService, canApproveBudget, resolveDisplayName } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 const MAX_LINE_ITEMS = 30;
+// Phase 15: see the matching comment in app/api/commercial-documents/route.ts
 function parseLineItems(body: unknown): DocumentLineItem[] {
   if (!Array.isArray(body)) return [];
   const items: DocumentLineItem[] = [];
@@ -21,7 +23,12 @@ function parseLineItems(body: unknown): DocumentLineItem[] {
     const quantity = Number(rawItem.quantity);
     const unitAmount = Number(rawItem.unitAmount);
     if (!description || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitAmount) || unitAmount < 0) continue;
-    items.push({ description, quantity, unitAmount });
+    const catalogItemId = typeof rawItem.catalogItemId === "string" && rawItem.catalogItemId ? rawItem.catalogItemId : null;
+    const rawTaxRate = rawItem.taxRate;
+    const taxRate = rawTaxRate === null || rawTaxRate === undefined
+      ? null
+      : (Number.isFinite(Number(rawTaxRate)) ? Math.max(0, Math.min(100, Number(rawTaxRate))) : null);
+    items.push({ description, quantity, unitAmount, catalogItemId, taxRate });
   }
   return items;
 }
@@ -34,8 +41,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json(doc);
 }
 
-type Action = "submit" | "approve" | "reject" | "reopen" | "mark_acknowledged";
-const VALID_ACTIONS: Action[] = ["submit", "approve", "reject", "reopen", "mark_acknowledged"];
+type Action = "submit" | "approve" | "reject" | "reopen" | "mark_acknowledged" | "mark_accepted";
+const VALID_ACTIONS: Action[] = ["submit", "approve", "reject", "reopen", "mark_acknowledged", "mark_accepted"];
 
 // PATCH /api/commercial-documents/:id — two shapes:
 //
@@ -50,6 +57,11 @@ const VALID_ACTIONS: Action[] = ["submit", "approve", "reject", "reopen", "mark_
 //     invoice, where acknowledgment is payment-driven only (see
 //     lib/db-documents.ts's recordPayment) so staff can never claim a
 //     payment that didn't happen.
+//     mark_accepted: Phase 15, Proposal only — a manual staff
+//     attestation that the customer accepted the Proposal, separate
+//     from mark_acknowledged and from the internal `approved` status.
+//     Unlocks POST /api/commercial-documents's fromAcceptedProposalId
+//     path (create an Invoice from this Proposal).
 //
 //   { title, body, details, lineItems, amount, currency, dueDate }
 //     Content edit — only while status = 'draft', same
@@ -88,6 +100,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (!canManageService(ctx, doc.serviceId)) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
       await advanceDocumentStatus(ctx.orgId, id, "draft");
       return NextResponse.json({ id, status: "draft" as DocumentStatus });
+    }
+
+    if (action === "mark_accepted") {
+      if (doc.docType !== "proposal") return NextResponse.json({ error: "Only a Proposal can be marked accepted" }, { status: 400 });
+      if (!["approved", "issued", "sent", "delivered"].includes(doc.status)) {
+        return NextResponse.json({ error: "Only an approved (or further-along) Proposal can be marked accepted" }, { status: 400 });
+      }
+      if (doc.acceptedAt) return NextResponse.json({ error: "This Proposal is already marked accepted" }, { status: 400 });
+      if (!canManageService(ctx, doc.serviceId)) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+      const acceptedByName = await resolveDisplayName(ctx, typeof body.acceptedByName === "string" ? body.acceptedByName : undefined);
+      await markProposalAccepted(ctx.orgId, id, acceptedByName);
+      const updated = await getDocument(ctx.orgId, id);
+      return NextResponse.json(updated);
     }
 
     // mark_acknowledged

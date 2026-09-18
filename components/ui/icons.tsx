@@ -182,6 +182,17 @@ export function IconSettings(props: IconProps) {
   );
 }
 
+// Phase 15 — the /settings/price-catalog nav entry (a price tag, for
+// the predefined-services price list).
+export function IconPriceCatalog(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12.4 3.5h6.1a1 1 0 0 1 1 1v6.1a1 1 0 0 1-.3.7l-8.2 8.2a1 1 0 0 1-1.4 0l-6.1-6.1a1 1 0 0 1 0-1.4l8.2-8.2a1 1 0 0 1 .7-.3Z" />
+      <circle cx="16.5" cy="7.5" r="1.4" />
+    </svg>
+  );
+}
+
 export function IconMenu(props: IconProps) {
   return (
     <svg {...base} {...props}>

@@ -19,9 +19,16 @@ export default async function InvoicePage({ params }: { params: Promise<{ token:
   const orgSettings = await getOrgSettings(doc.orgId);
   const orgName = await getOrgName(doc.orgId);
   const legalName = orgSettings.legalName || orgName;
+  // Phase 15: tax is computed per line item (each item's own snapshotted
+  // taxRate — see lib/db-documents.ts's DocumentLineItem comment), same
+  // as lib/pdf-commercial.ts. Falls back to the org's current VAT rate
+  // applied once only when there are no line items at all to carry a
+  // per-item rate.
   const subtotal = doc.amount ?? doc.lineItems.reduce((sum, i) => sum + i.quantity * i.unitAmount, 0);
-  const vatAmount = orgSettings.vatRegistered ? subtotal * (orgSettings.vatRate / 100) : 0;
-  const total = subtotal + vatAmount;
+  const taxAmount = doc.lineItems.length > 0
+    ? doc.lineItems.reduce((sum, i) => sum + i.quantity * i.unitAmount * ((i.taxRate ?? 0) / 100), 0)
+    : (orgSettings.vatRegistered ? subtotal * (orgSettings.vatRate / 100) : 0);
+  const total = subtotal + taxAmount;
   const paymentUrl = doc.dpoTransToken ? buildDpoPaymentUrl(doc.dpoTransToken) : null;
   const fmt = (n: number) => `${doc.currency} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -77,7 +84,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ token:
 
       <div style={{ marginTop: 16, textAlign: "right", fontSize: "0.9rem" }}>
         <div>Subtotal: {fmt(subtotal)}</div>
-        {orgSettings.vatRegistered && <div>VAT ({orgSettings.vatRate}%): {fmt(vatAmount)}</div>}
+        {taxAmount > 0 && <div>Tax: {fmt(taxAmount)}</div>}
         <div style={{ fontWeight: 700, fontSize: "1.1rem", marginTop: 4 }}>Total: {fmt(total)}</div>
         {doc.dueDate && <div style={{ color: "var(--v2-text-faint)", fontSize: "0.8rem", marginTop: 4 }}>Due {new Date(doc.dueDate).toLocaleDateString()}</div>}
       </div>

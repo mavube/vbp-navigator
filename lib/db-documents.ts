@@ -33,10 +33,26 @@ export type PaymentStatus = "not_applicable" | "unpaid" | "paid" | "failed" | "r
 // concepts belong to different tables/modules (a commercial document
 // here vs. the internal AP/AR ledger there) that just happen to need
 // the same three fields.
+//
+// Phase 15 (Diallo's "case 1" corrections): `catalogItemId` and
+// `taxRate` are new, optional so a Phase 14 document's existing line
+// items (which have neither) keep working unchanged. `unitAmount` is
+// always tax-exclusive; `taxRate` is the percentage snapshotted from
+// lib/db-price-catalog.ts's PriceCatalogItem (or the org's VAT rate at
+// the moment of selection, when the catalog item's own tax_rate is
+// null) at the moment this line was added — never re-resolved later,
+// so a subsequent catalog or VAT-rate change never retroactively
+// changes a document that already exists. `catalogItemId` is null for
+// a hand-typed "custom item" line (still supported, for the genuine
+// one-off case) — never treated as "legacy" differently from that; the
+// only thing that makes a row read-only in the editor is having a
+// catalogItemId at all.
 export interface DocumentLineItem {
   description: string;
   quantity: number;
   unitAmount: number;
+  catalogItemId?: string | null;
+  taxRate?: number | null;
 }
 
 export interface DocumentRow {
@@ -81,6 +97,13 @@ export interface DocumentRow {
   acknowledgedAt: string | null;
   issuedByName: string;
   documentNumber: string | null;
+  // Phase 15 — set only by markProposalAccepted, only for docType =
+  // 'proposal'. A manual staff attestation ("the customer said yes" —
+  // by phone, email, or a signed copy), distinct from the existing
+  // `approved` status (that's internal sign-off; this is the
+  // customer's own acceptance) — see migration 0021's file comment.
+  acceptedAt: string | null;
+  acceptedByName: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -169,6 +192,9 @@ function ensureSchema(): Promise<void> {
       addIfMissing("acknowledged_at", "acknowledged_at TEXT");
       addIfMissing("issued_by_name", "issued_by_name TEXT NOT NULL DEFAULT ''");
       addIfMissing("document_number", "document_number TEXT");
+      // Phase 15 (commercial documents corrections)
+      addIfMissing("accepted_at", "accepted_at TEXT");
+      addIfMissing("accepted_by_name", "accepted_by_name TEXT NOT NULL DEFAULT ''");
     })();
   }
   return schemaReady;
@@ -210,6 +236,8 @@ function fromSqliteRow(row: Record<string, unknown>): DocumentRow {
     acknowledgedAt: (row.acknowledged_at as string) ?? null,
     issuedByName: (row.issued_by_name as string) ?? "",
     documentNumber: (row.document_number as string) ?? null,
+    acceptedAt: (row.accepted_at as string) ?? null,
+    acceptedByName: (row.accepted_by_name as string) ?? "",
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
@@ -226,6 +254,7 @@ const PG_COLS = `id, service_id AS "serviceId", lead_id AS "leadId", engagement_
                     dpo_trans_ref AS "dpoTransRef", dpo_company_ref AS "dpoCompanyRef", paid_at AS "paidAt",
                     access_token AS "accessToken", issued_at AS "issuedAt", delivered_at AS "deliveredAt",
                     acknowledged_at AS "acknowledgedAt", issued_by_name AS "issuedByName", document_number AS "documentNumber",
+                    accepted_at AS "acceptedAt", accepted_by_name AS "acceptedByName",
                     created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 export async function listDocuments(orgId: string): Promise<DocumentRow[]> {
@@ -320,6 +349,7 @@ export async function createDocument(orgId: string, input: NewDocument): Promise
     attachmentUrl, parentDocumentId, amount, currency, lineItems, dueDate, paymentStatus: "not_applicable",
     dpoTransToken: null, dpoTransRef: null, dpoCompanyRef: null, paidAt: null, accessToken: null,
     issuedAt: null, deliveredAt: null, acknowledgedAt: null, issuedByName: "", documentNumber: null,
+    acceptedAt: null, acceptedByName: "",
     createdAt: now, updatedAt: now,
   };
 }
@@ -523,6 +553,31 @@ export async function markPaymentFailed(orgId: string, id: string): Promise<void
     );
   } else {
     (await getSqliteDb()).prepare(`UPDATE documents SET payment_status = 'failed', updated_at = ? WHERE org_id = ? AND id = ?`).run(now, orgId, id);
+  }
+}
+
+// Phase 15 — a manual staff attestation that the customer accepted a
+// Proposal (by phone, email, or a signed copy — this app has no public
+// accept-link page yet). The WHERE clause's own doc_type guard is a
+// second line of defense on top of the API route's check — belt and
+// braces, same reasoning as recordPayment only ever being called from
+// a real DPO verifyToken success.
+export async function markProposalAccepted(orgId: string, id: string, acceptedByName: string): Promise<void> {
+  await ensureSchema();
+  const now = new Date().toISOString();
+  if (IS_POSTGRES) {
+    await (await getPgPool()).query(
+      `UPDATE documents SET accepted_at = $1, accepted_by_name = $2, updated_at = $1
+       WHERE org_id = $3 AND id = $4 AND doc_type = 'proposal'`,
+      [now, acceptedByName, orgId, id]
+    );
+  } else {
+    (await getSqliteDb())
+      .prepare(
+        `UPDATE documents SET accepted_at = ?, accepted_by_name = ?, updated_at = ?
+         WHERE org_id = ? AND id = ? AND doc_type = 'proposal'`
+      )
+      .run(now, acceptedByName, now, orgId, id);
   }
 }
 

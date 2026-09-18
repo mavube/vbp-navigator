@@ -12,10 +12,27 @@ export type CommercialStatus =
 
 export type PaymentStatus = "not_applicable" | "unpaid" | "paid" | "failed" | "refunded";
 
+// Phase 15: catalogItemId/taxRate are optional so a pre-Phase-15 line
+// item (created before the predefined-services catalog existed) keeps
+// rendering and editing fine — see lib/db-documents.ts's
+// DocumentLineItem comment for the full snapshot-at-selection-time
+// reasoning.
 export interface LineItem {
   description: string;
   quantity: number;
   unitAmount: number;
+  catalogItemId?: string | null;
+  taxRate?: number | null;
+}
+
+export interface PriceCatalogItemOption {
+  id: string;
+  name: string;
+  description: string;
+  unitPrice: number;
+  currency: string;
+  taxRate: number | null;
+  active: boolean;
 }
 
 export interface ServiceOption {
@@ -68,6 +85,8 @@ export interface CommercialDocument {
   acknowledgedAt: string | null;
   issuedByName: string;
   documentNumber: string | null;
+  acceptedAt: string | null;
+  acceptedByName: string;
   createdByName: string;
   createdAt: string;
 }

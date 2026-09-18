@@ -12,6 +12,7 @@ import type {
   EngagementOption,
   CustomerOption,
   LineItem,
+  PriceCatalogItemOption,
 } from "@/components/commercial/types";
 
 const TYPE_LABELS: Record<CommercialDocType, string> = { proposal: "Proposal", quotation: "Quotation", invoice: "Invoice" };
@@ -27,12 +28,18 @@ export function NewCommercialDocumentForm({
   leads,
   engagements,
   customers,
+  catalogItems,
+  orgVatRate,
+  defaultCurrency,
   onCreated,
 }: {
   services: ServiceOption[];
   leads: LeadOption[];
   engagements: EngagementOption[];
   customers: CustomerOption[];
+  catalogItems: PriceCatalogItemOption[];
+  orgVatRate: number;
+  defaultCurrency: string;
   onCreated: (doc: CommercialDocument) => void;
 }) {
   const [docType, setDocType] = useState<CommercialDocType>("invoice");
@@ -44,9 +51,9 @@ export function NewCommercialDocumentForm({
   const [recipientName, setRecipientName] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [details, setDetails] = useState("");
-  const [currency, setCurrency] = useState("TZS");
+  const [currency, setCurrency] = useState(defaultCurrency || "TZS");
   const [dueDate, setDueDate] = useState("");
-  const [lineItems, setLineItems] = useState<LineItem[]>([{ description: "", quantity: 1, unitAmount: 0 }]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -69,7 +76,7 @@ export function NewCommercialDocumentForm({
     setError("");
     setBusy(true);
     try {
-      const validItems = lineItems.filter((i) => i.description.trim() && i.quantity > 0);
+      const validItems = lineItems.filter((i) => i.quantity > 0 && (i.catalogItemId || i.description.trim()));
       const res = await fetch("/api/commercial-documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -96,7 +103,7 @@ export function NewCommercialDocumentForm({
       setDetails("");
       setRecipientName("");
       setRecipientEmail("");
-      setLineItems([{ description: "", quantity: 1, unitAmount: 0 }]);
+      setLineItems([]);
       setDueDate("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't create document");
@@ -174,7 +181,14 @@ export function NewCommercialDocumentForm({
         onChange={(e) => setDetails(e.target.value)}
       />
 
-      <LineItemEditor items={lineItems} onChange={setLineItems} currency={currency} />
+      <LineItemEditor
+        items={lineItems}
+        onChange={setLineItems}
+        currency={currency}
+        catalogItems={catalogItems}
+        orgVatRate={orgVatRate}
+        onCurrencySuggest={setCurrency}
+      />
 
       <div style={{ display: "flex", gap: "var(--v2-space-2)", flexWrap: "wrap" }}>
         <Input placeholder="Currency" value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase().slice(0, 10))} style={{ width: 100 }} />
