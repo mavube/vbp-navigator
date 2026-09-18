@@ -4,7 +4,7 @@ export type DocumentType =
   | "invitation"
   | "approval_request"
   | "confirmation"
-  | "admission_communication"
+  | "welcome_communication"
   | "completion_record";
 
 export type DocumentStatus = "draft" | "pending_approval" | "approved" | "rejected";

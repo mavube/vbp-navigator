@@ -7,8 +7,8 @@ import { DocumentItem } from "@/components/documents/DocumentItem";
 import type { DocumentRecord, ServiceOption, LeadOption, EngagementOption, CustomerOption } from "@/components/documents/types";
 
 // v3.0 roadmap Phase 5 — the Document Generation Engine's UI. Pulls
-// four things in parallel: services and leads (for pre-admission
-// document anchors), customers+engagements (for post-admission
+// four things in parallel: services and leads (for pre-engagement
+// document anchors), customers+engagements (for post-engagement
 // anchors), and the documents themselves.
 export function DocumentsWorkspace() {
   const [services, setServices] = useState<ServiceOption[]>([]);

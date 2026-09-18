@@ -20,7 +20,7 @@ export type DocumentType =
   | "invitation"
   | "approval_request"
   | "confirmation"
-  | "admission_communication"
+  | "welcome_communication"
   | "completion_record";
 
 export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
@@ -30,7 +30,7 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   invitation: "Invitation",
   approval_request: "Approval Request",
   confirmation: "Confirmation",
-  admission_communication: "Admission Communication",
+  welcome_communication: "Welcome Communication",
   completion_record: "Completion Record",
 };
 
@@ -46,14 +46,22 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
 // approved/rejected flow the other five types still use.
 export const COMMERCIAL_TYPES: ReadonlySet<DocumentType> = new Set(["proposal", "quotation", "invoice"]);
 
-// Pre-admission types can be generated against a Lead (no Customer
-// exists yet); post-admission types need a real Engagement. Used both
+// Pre-engagement types can be generated against a Lead (no Customer
+// exists yet); post-engagement types need a real Engagement. Used both
 // to validate on the server and to drive which anchor picker the UI
 // shows for a given type. Commercial types (above) are exempt from
 // this pre/post split entirely — they can anchor to a lead, an
 // engagement, a customer directly, or nothing at all.
-export const PRE_ADMISSION_TYPES: ReadonlySet<DocumentType> = new Set(["invitation", "approval_request"]);
-export const POST_ADMISSION_TYPES: ReadonlySet<DocumentType> = new Set(["confirmation", "admission_communication", "completion_record"]);
+//
+// Phase F (portfolio correction, Track 2) renamed these from
+// PRE_ADMISSION_TYPES/POST_ADMISSION_TYPES — "admission" was PMP's own
+// Candidate Admission CVS vocabulary leaking into a generic document
+// rule that applies to every GDC offering (MS Project Training,
+// ValueBlueprint Advisory, anything future). The split itself is
+// unchanged: it's about whether a Lead or an Engagement exists yet,
+// not about any one service's process name.
+export const PRE_ENGAGEMENT_TYPES: ReadonlySet<DocumentType> = new Set(["invitation", "approval_request"]);
+export const POST_ENGAGEMENT_TYPES: ReadonlySet<DocumentType> = new Set(["confirmation", "welcome_communication", "completion_record"]);
 
 export interface DocumentContext {
   orgName: string;
@@ -62,7 +70,7 @@ export interface DocumentContext {
   customerNeed: string;
   recipientName: string;
   details: string;
-  engagementStartDate?: string; // ISO date, only set for post-admission types
+  engagementStartDate?: string; // ISO date, only set for post-engagement types
 }
 
 function fmtDate(iso?: string): string {
@@ -164,12 +172,12 @@ function confirmation(ctx: DocumentContext) {
   };
 }
 
-function admissionCommunication(ctx: DocumentContext) {
+function welcomeCommunication(ctx: DocumentContext) {
   return {
     title: `Welcome — ${ctx.serviceName}`,
     body: [
       `Dear ${ctx.recipientName},`,
-      `Congratulations — you've been admitted to ${ctx.serviceName} with ${ctx.orgName}${ctx.engagementStartDate ? `, starting ${fmtDate(ctx.engagementStartDate)}` : ""}.`,
+      `Congratulations — you're all set for ${ctx.serviceName} with ${ctx.orgName}${ctx.engagementStartDate ? `, starting ${fmtDate(ctx.engagementStartDate)}` : ""}.`,
       ctx.details ? `What happens next:\n${ctx.details}` : "",
       `We're glad to have you.`,
       `Regards,\n${ctx.orgName}`,
@@ -199,7 +207,7 @@ const TEMPLATES: Record<DocumentType, (ctx: DocumentContext) => { title: string;
   invitation,
   approval_request: approvalRequest,
   confirmation,
-  admission_communication: admissionCommunication,
+  welcome_communication: welcomeCommunication,
   completion_record: completionRecord,
 };
 

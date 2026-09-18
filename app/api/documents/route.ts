@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listDocumentsByTypes, createDocument } from "@/lib/db-documents";
 import { resolveDocumentAnchor } from "@/lib/document-context";
-import { renderDocument, PRE_ADMISSION_TYPES, type DocumentType } from "@/lib/document-templates";
+import { renderDocument, PRE_ENGAGEMENT_TYPES, type DocumentType } from "@/lib/document-templates";
 import { getOrgName } from "@/lib/organizations";
 import { getUserContext, canManageService, resolveDisplayName } from "@/lib/permissions";
 
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 // letter types, unchanged.
 const VALID_TYPES: DocumentType[] = [
   "invitation", "approval_request",
-  "confirmation", "admission_communication", "completion_record",
+  "confirmation", "welcome_communication", "completion_record",
 ];
 
 // GET /api/documents — every document for the org, newest first. Same
@@ -25,10 +25,10 @@ export async function GET() {
 }
 
 // POST /api/documents — generate a new draft (v3.0 roadmap Phase 5).
-// Pre-admission types (proposal/quotation/invitation/approval_request)
-// take leadId; post-admission types (confirmation/
-// admission_communication/completion_record) take engagementId — see
-// lib/document-templates.ts's PRE_ADMISSION_TYPES/POST_ADMISSION_TYPES.
+// Pre-engagement types (invitation/approval_request) take leadId;
+// post-engagement types (confirmation/welcome_communication/
+// completion_record) take engagementId — see
+// lib/document-templates.ts's PRE_ENGAGEMENT_TYPES/POST_ENGAGEMENT_TYPES.
 // Gated the same as recording an Expense (that service's owner/
 // contributor or an org admin) — a generated document is a real
 // outward-facing artifact, not an open-creation item like a Task.
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   const engagementId = typeof body.engagementId === "string" && body.engagementId ? body.engagementId : null;
   const details = typeof body.details === "string" ? body.details.slice(0, 8000) : "";
 
-  const expectedAnchor = PRE_ADMISSION_TYPES.has(docType) ? "leadId" : "engagementId";
+  const expectedAnchor = PRE_ENGAGEMENT_TYPES.has(docType) ? "leadId" : "engagementId";
   if (expectedAnchor === "leadId" && !leadId) {
     return NextResponse.json({ error: "leadId is required for this document type" }, { status: 400 });
   }

@@ -1,5 +1,5 @@
-// Resolves a document's anchor (a Lead for pre-admission types, an
-// Engagement for post-admission types) into the data
+// Resolves a document's anchor (a Lead for pre-engagement types, an
+// Engagement for post-engagement types) into the data
 // lib/document-templates.ts needs to render — cross-module
 // coordination that belongs in its own small file rather than
 // duplicated between app/api/documents/route.ts and
@@ -10,7 +10,7 @@ import { listServices } from "@/lib/db-services";
 import { getLead } from "@/lib/db-leads";
 import { getEngagement } from "@/lib/db-engagements";
 import { getCustomerById } from "@/lib/db-customers";
-import { PRE_ADMISSION_TYPES, type DocumentContext, type DocumentType } from "@/lib/document-templates";
+import { PRE_ENGAGEMENT_TYPES, type DocumentContext, type DocumentType } from "@/lib/document-templates";
 
 export interface ResolvedAnchor {
   serviceId: string;
@@ -22,7 +22,7 @@ export interface ResolvedAnchor {
 }
 
 // Returns null when the anchor doesn't exist or the docType/anchor
-// combination is invalid (e.g. a post-admission type with no
+// combination is invalid (e.g. a post-engagement type with no
 // engagementId) — the caller turns that into a 400/404, this file
 // stays free of NextResponse/HTTP concerns.
 export async function resolveDocumentAnchor(
@@ -34,7 +34,7 @@ export async function resolveDocumentAnchor(
 ): Promise<ResolvedAnchor | null> {
   const services = await listServices(orgId);
 
-  if (PRE_ADMISSION_TYPES.has(docType)) {
+  if (PRE_ENGAGEMENT_TYPES.has(docType)) {
     if (!leadId) return null;
     const lead = await getLead(orgId, leadId);
     if (!lead) return null;
@@ -92,7 +92,7 @@ export interface CommercialAnchorInput {
 // Phase 14 — the flexible resolver for commercial documents
 // (proposal/quotation/invoice). Unlike resolveDocumentAnchor above,
 // none of the four anchor shapes is mandatory: an engagement (post-
-// admission, richest context), a lead (pre-admission), a customer
+// engagement, richest context), a lead (pre-engagement), a customer
 // directly (no active engagement, e.g. a repeat one-off sale), or
 // nothing at all — Diallo's "phone call, create invoice directly"
 // case, where serviceId + recipientName + recipientEmail are simply

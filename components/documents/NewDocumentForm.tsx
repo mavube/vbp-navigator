@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { DOCUMENT_TYPE_LABELS, PRE_ADMISSION_TYPES, COMMERCIAL_TYPES, type DocumentType } from "@/lib/document-templates";
+import { DOCUMENT_TYPE_LABELS, PRE_ENGAGEMENT_TYPES, COMMERCIAL_TYPES, type DocumentType } from "@/lib/document-templates";
 import type { DocumentRecord, LeadOption, EngagementOption, CustomerOption, ServiceOption } from "@/components/documents/types";
 
 // Proposal/Quotation/Invoice live in the Commercial Docs module now
@@ -34,7 +34,7 @@ export function NewDocumentForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const isPreAdmission = PRE_ADMISSION_TYPES.has(docType);
+  const isPreEngagement = PRE_ENGAGEMENT_TYPES.has(docType);
 
   function serviceName(id: string) {
     return services.find((s) => s.id === id)?.name ?? "Unknown service";
@@ -53,8 +53,8 @@ export function NewDocumentForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           docType,
-          leadId: isPreAdmission ? leadId : undefined,
-          engagementId: isPreAdmission ? undefined : engagementId,
+          leadId: isPreEngagement ? leadId : undefined,
+          engagementId: isPreEngagement ? undefined : engagementId,
           details,
           recipientName: recipientName || undefined,
           recipientEmail: recipientEmail || undefined,
@@ -101,7 +101,7 @@ export function NewDocumentForm({
           ))}
         </select>
 
-        {isPreAdmission ? (
+        {isPreEngagement ? (
           <select value={leadId} onChange={(e) => setLeadId(e.target.value)} required className="v2-input" style={{ maxWidth: 300 }}>
             <option value="" disabled>
               Which lead is this for…
@@ -129,7 +129,7 @@ export function NewDocumentForm({
       <textarea
         className="v2-input"
         rows={3}
-        placeholder={isPreAdmission ? "Details specific to this document (price, date, justification…)" : "Details specific to this document (optional)"}
+        placeholder={isPreEngagement ? "Details specific to this document (price, date, justification…)" : "Details specific to this document (optional)"}
         value={details}
         onChange={(e) => setDetails(e.target.value)}
       />
@@ -178,15 +178,15 @@ export function NewDocumentForm({
         </button>
       )}
 
-      {isPreAdmission && leads.length === 0 && (
+      {isPreEngagement && leads.length === 0 && (
         <p className="v2-public-hint">No leads yet — add one on Pipeline first.</p>
       )}
-      {!isPreAdmission && engagements.length === 0 && (
-        <p className="v2-public-hint">No engagements yet — a lead needs to be marked admitted on Pipeline first.</p>
+      {!isPreEngagement && engagements.length === 0 && (
+        <p className="v2-public-hint">No engagements yet — a lead needs to be marked won on Pipeline first.</p>
       )}
 
       <div>
-        <Button type="submit" disabled={busy || (isPreAdmission ? !leadId : !engagementId)}>
+        <Button type="submit" disabled={busy || (isPreEngagement ? !leadId : !engagementId)}>
           {busy ? "Generating…" : "Generate document"}
         </Button>
       </div>
