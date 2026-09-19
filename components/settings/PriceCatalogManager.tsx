@@ -63,11 +63,18 @@ const EMPTY_NEW: FormState = {
   expectedOutcome: "", relatedDocuments: "", requiredCapabilities: [],
 };
 
-// Examples straight from the "NavigatorOS Operating Model Refinement"
-// brief (SS3) — a starting point for the datalist, not an enforced
-// list. Category stays free text: adding a new GDC offering (or a new
-// category for one) is a catalog operation, not a software-development
-// exercise.
+// Post-Phase-G fix (Diallo: Category/Type "currently manually filled
+// in and this invites human errors or naming inconsistency... we
+// should have an option to select"). These two lists are now real,
+// enforced dropdowns (SuggestSelect below) rather than a soft
+// datalist behind a free-text input — the values themselves are
+// unchanged from the "NavigatorOS Operating Model Refinement" brief
+// (SS3), already grounded in GDC's real named CVS (see
+// claude/vbp-gdc-pmp-case-study.md). Both lists keep an explicit
+// "Other" escape hatch (see SuggestSelect), so a genuinely new
+// category or type never blocks adding an item — it's still a catalog
+// operation, not a software-development exercise, just a controlled
+// one now instead of free text.
 const CATEGORY_SUGGESTIONS = [
   "Training & Capability Development",
   "Business Transformation & ICT Advisory",
@@ -75,6 +82,24 @@ const CATEGORY_SUGGESTIONS = [
   "Business Process & Value Advisory",
   "Technology & Digital Solutions",
 ];
+
+// New with this fix — Category answers "which GDC business line,"
+// Type answers "what shape does delivering it take." Proposed against
+// the offerings already named across this project's own test data
+// (PMP Master Class, MS Project Training = a course; ValueBlueprint
+// Advisory = an advisory engagement) — not yet independently confirmed
+// value-by-value the way Category's list was, so easy to edit later
+// (a plain array, same as Category) if these don't match how GDC
+// actually talks about its offerings.
+const TYPE_SUGGESTIONS = [
+  "Certification Program",
+  "Corporate Training / Course",
+  "Advisory Engagement",
+  "Consulting Retainer",
+  "One-off Service",
+];
+
+const OTHER_VALUE = "__other__";
 
 function toForm(item: CatalogItem): FormState {
   return {
@@ -120,6 +145,13 @@ export function PriceCatalogManager() {
   const [editForm, setEditForm] = useState<FormState | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  // Bumped on a successful add so the Category/Type SuggestSelects
+  // below remount fresh via their key — otherwise a SuggestSelect left
+  // in "Other" mode (its own internal state, not derivable from a now
+  // -empty value alone — see that component's own comment) would stay
+  // showing an empty "Other" text box after the form resets, instead
+  // of cleanly going back to the placeholder.
+  const [formResetKey, setFormResetKey] = useState(0);
 
   function load() {
     setLoading(true);
@@ -164,6 +196,7 @@ export function PriceCatalogManager() {
       setItems((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
       setForm({ ...EMPTY_NEW, currency: defaultCurrency });
       setShowNewDetails(false);
+      setFormResetKey((k) => k + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't add item");
     } finally {
@@ -231,10 +264,24 @@ export function PriceCatalogManager() {
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required placeholder="e.g. MS Project Training" />
             </Field>
             <Field label="Category" style={{ flex: "1 1 200px" }}>
-              <Input list="category-suggestions" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. Training & Capability Development" />
+              <SuggestSelect
+                key={`category-${formResetKey}`}
+                value={form.category}
+                onChange={(v) => setForm({ ...form, category: v })}
+                options={CATEGORY_SUGGESTIONS}
+                placeholder="Category…"
+                otherPlaceholder="e.g. a new GDC business line"
+              />
             </Field>
             <Field label="Type" style={{ flex: "1 1 160px" }}>
-              <Input value={form.offeringType} onChange={(e) => setForm({ ...form, offeringType: e.target.value })} placeholder="e.g. Course, Advisory Engagement" />
+              <SuggestSelect
+                key={`type-${formResetKey}`}
+                value={form.offeringType}
+                onChange={(v) => setForm({ ...form, offeringType: v })}
+                options={TYPE_SUGGESTIONS}
+                placeholder="Type…"
+                otherPlaceholder="e.g. a new offering shape"
+              />
             </Field>
           </div>
           <div style={{ display: "flex", gap: "var(--v2-space-2)", flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -269,11 +316,6 @@ export function PriceCatalogManager() {
             {creating ? "Adding…" : "Add to catalog"}
           </Button>
         </form>
-        <datalist id="category-suggestions">
-          {CATEGORY_SUGGESTIONS.map((c) => (
-            <option key={c} value={c} />
-          ))}
-        </datalist>
       </Section>
 
       <Section
@@ -295,10 +337,22 @@ export function PriceCatalogManager() {
                         <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
                       </Field>
                       <Field label="Category" style={{ flex: "1 1 180px" }}>
-                        <Input list="category-suggestions" value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} />
+                        <SuggestSelect
+                          value={editForm.category}
+                          onChange={(v) => setEditForm({ ...editForm, category: v })}
+                          options={CATEGORY_SUGGESTIONS}
+                          placeholder="Category…"
+                          otherPlaceholder="e.g. a new GDC business line"
+                        />
                       </Field>
                       <Field label="Type" style={{ flex: "1 1 160px" }}>
-                        <Input value={editForm.offeringType} onChange={(e) => setEditForm({ ...editForm, offeringType: e.target.value })} />
+                        <SuggestSelect
+                          value={editForm.offeringType}
+                          onChange={(v) => setEditForm({ ...editForm, offeringType: v })}
+                          options={TYPE_SUGGESTIONS}
+                          placeholder="Type…"
+                          otherPlaceholder="e.g. a new offering shape"
+                        />
                       </Field>
                     </div>
                     <div style={{ display: "flex", gap: "var(--v2-space-2)", flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -472,6 +526,77 @@ function OfferingDetailFields({
             })}
           </div>
         </Field>
+      )}
+    </div>
+  );
+}
+
+// A real <select> against a known list, with an explicit "Other"
+// option that reveals a plain text input for anything not on the
+// list — used for both Category and Type. Driven entirely off `value`
+// (no local state to fall out of sync with the parent form): a value
+// that matches a list entry shows that entry selected; an empty value
+// shows the placeholder; anything else (including legacy free-text
+// values from before this fix, or GDC's own new-not-yet-listed
+// category/type) is treated as "Other" and shown, unmodified, in the
+// paired text input — so an existing item's category/type is never
+// silently blanked out just because it doesn't match a suggestion.
+function SuggestSelect({
+  value,
+  onChange,
+  options,
+  placeholder,
+  otherPlaceholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  placeholder: string;
+  otherPlaceholder: string;
+}) {
+  // `otherChosen` is separate local state, not purely derived from
+  // `value` — the moment someone picks "Other (specify)" the value is
+  // cleared to "" so the text field starts blank, and "" can't be told
+  // apart from "nothing selected yet" by value alone. A value that
+  // arrives from outside already unlisted (legacy free-text data, or a
+  // fresh mount when editing a different item — see this component's
+  // call sites, each keyed so switching items always remounts fresh)
+  // still correctly starts in Other mode via the initializer below.
+  const [otherChosen, setOtherChosen] = useState(value !== "" && !options.includes(value));
+  const isOther = otherChosen || (value !== "" && !options.includes(value));
+  const selectValue = isOther ? OTHER_VALUE : value;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <select
+        className="v2-input"
+        value={selectValue}
+        onChange={(e) => {
+          const next = e.target.value;
+          if (next === OTHER_VALUE) {
+            setOtherChosen(true);
+            onChange("");
+          } else {
+            setOtherChosen(false);
+            onChange(next);
+          }
+        }}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+        <option value={OTHER_VALUE}>Other (specify)…</option>
+      </select>
+      {isOther && (
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={otherPlaceholder}
+          autoFocus
+        />
       )}
     </div>
   );
