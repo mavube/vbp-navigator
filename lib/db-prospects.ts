@@ -9,6 +9,10 @@ import { randomUUID } from "node:crypto";
 import { IS_POSTGRES, getPgPool, getSqliteDb } from "@/lib/db-driver";
 import { createLead, findLeadByEmail } from "@/lib/db-leads";
 import { findCustomerByEmail } from "@/lib/db-customers";
+import { createTask, type TaskRow } from "@/lib/db-tasks";
+import { getPriceCatalogItem } from "@/lib/db-price-catalog";
+import { buildConversationBrief, formatConversationBriefText, suggestFollowUpDueDate } from "@/lib/conversation-brief";
+import { checkPmpEligibility } from "@/lib/pmp-eligibility";
 
 // v3.0 roadmap Phase 10 (Cluster C) added 'manual' — a prospect staff
 // logged directly (app/api/prospects/route.ts's POST) rather than one
@@ -235,7 +239,34 @@ export async function promoteProspectToLead(orgId: string, id: string, serviceId
   });
 
   await updateProspectStatus(orgId, id, "promoted", lead.id);
-  return { lead, duplicateWarning };
+
+  // Phase 3 — "promoting a prospect to a Lead also creates one real
+  // Task... whose title is the next action and whose due date is the
+  // stated timing." Reuses the existing Tasks table rather than a
+  // parallel "follow-up" concept — Tasks has no leadId/customerId
+  // column (an earlier, deliberate decision — see the plan doc's
+  // journey audit), so this is a one-way, fire-once creation: the Task
+  // exists and shows up wherever Tasks already show up, but nothing
+  // here or later can look up "the task for this lead" the way it can
+  // look up a Customer's engagements. The caller surfaces the new
+  // task's id once, right after promotion (see
+  // app/api/prospects/[id]/promote/route.ts and ProspectItem.tsx's
+  // wonCustomerId-style local state), the same one-time-surface
+  // pattern LeadItem.tsx already uses for the Customer created on
+  // winning a lead.
+  const brief = buildConversationBrief(prospect.assessmentAnswers);
+  const product = prospect.productServiceId ? await getPriceCatalogItem(orgId, prospect.productServiceId).catch(() => null) : null;
+  const isPmpAnswers = "educationPathway" in prospect.assessmentAnswers;
+  const descriptionParts = [formatConversationBriefText(brief)];
+  if (isPmpAnswers) descriptionParts.push("", `PMP eligibility: ${checkPmpEligibility(prospect.assessmentAnswers).statement}`);
+  const task: TaskRow = await createTask(orgId, {
+    serviceId,
+    title: `Follow up with ${prospect.fullName}${product ? ` — ${product.name}` : ""}`,
+    description: descriptionParts.join("\n"),
+    dueDate: suggestFollowUpDueDate(brief.timing),
+  });
+
+  return { lead, duplicateWarning, task };
 }
 
 // Exported so lib/rollups.ts (or any future cross-module reporting)

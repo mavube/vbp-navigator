@@ -38,6 +38,7 @@
 // else. Revisit if/when GDC's catalog grows a second certification.
 
 import type { AssessmentQuestion } from "@/lib/assessment-questions";
+import { START_TIMING_OPTIONS } from "@/lib/discovery-questions";
 
 export function isPmpProduct(productName: string): boolean {
   return /pmp/i.test(productName);
@@ -61,6 +62,18 @@ const TRAINING_OPTIONS = [
 
 const TRAINING_MET: ReadonlySet<string> = new Set(["35+ hours of project management education", "Active CAPM certification"]);
 
+// The four real PMI eligibility inputs — checkPmpEligibility() below
+// reads only these four keys. Phase 3 (Conversation Brief) appends two
+// more questions after them, "timing" and "motivation" — they carry no
+// weight in the eligibility computation at all; they exist so the
+// Conversation Brief has something real to summarize instead of
+// "not yet established" for why-they-came and timing on every PMP
+// lead, which is what happened when Phase 2 replaced the old generic
+// questions (experience/certification/timing/motivation) with these
+// eligibility-only ones. "timing" reuses discovery's own vocabulary
+// (see lib/discovery-questions.ts's START_TIMING_OPTIONS) rather than
+// inventing a third timing vocabulary alongside discovery's and the
+// old generic assessment's.
 export const PMP_ELIGIBILITY_QUESTIONS: AssessmentQuestion[] = [
   {
     key: "educationPathway",
@@ -84,6 +97,17 @@ export const PMP_ELIGIBILITY_QUESTIONS: AssessmentQuestion[] = [
     label: "Project management education completed",
     type: "select",
     options: [...TRAINING_OPTIONS],
+  },
+  {
+    key: "startTiming",
+    label: "When are you hoping to start?",
+    type: "select",
+    options: START_TIMING_OPTIONS,
+  },
+  {
+    key: "motivation",
+    label: "What's prompting you to pursue PMP now?",
+    type: "text",
   },
 ];
 

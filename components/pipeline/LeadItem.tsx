@@ -9,6 +9,7 @@ import { CommentThread } from "@/components/collaboration/CommentThread";
 import type { Lead, LeadStage } from "@/components/pipeline/types";
 import { ASSESSMENT_QUESTIONS } from "@/lib/assessment-questions";
 import { checkPmpEligibility } from "@/lib/pmp-eligibility";
+import { buildConversationBrief, BRIEF_CONSUMED_KEYS } from "@/lib/conversation-brief";
 
 const STAGE_ORDER: LeadStage[] = ["new", "contacted", "qualified", "won"];
 const STAGE_TONE: Record<LeadStage, "neutral" | "accent" | "success" | "danger"> = {
@@ -74,10 +75,29 @@ export function LeadItem({
   // "experience: 3-5 years" — and in the order the questions were
   // actually asked, not object-key order. Empty for any lead not
   // promoted from an /assess prospect (assessmentAnswers is then {}).
-  const assessmentEntries = ASSESSMENT_QUESTIONS.map((q) => ({
-    label: q.label,
-    value: lead.assessmentAnswers?.[q.key],
-  })).filter((e) => e.value !== undefined && e.value !== null && e.value !== "");
+  //
+  // Phase 3 fix: PMP_ELIGIBILITY_QUESTIONS (lib/pmp-eligibility.ts)
+  // reuses the "motivation" key for its own supplementary question, so
+  // a PMP lead's answers would otherwise leak one stray line into this
+  // panel by pure key coincidence, duplicating what the PMP facts
+  // panel and Conversation Brief already show with a better label.
+  // isPmpAnswers below makes this panel and the PMP one mutually
+  // exclusive, the same pattern ProspectItem.tsx already uses. On top
+  // of that, any individual key Conversation Brief already shows above
+  // (see lib/conversation-brief.ts's BRIEF_CONSUMED_KEYS) is filtered
+  // out here too — not just for the PMP case, but for an old-style
+  // generic-assessment lead as well, where "timing"/"motivation" would
+  // otherwise duplicate the Brief panel's own reading of those same
+  // two keys.
+  const isPmpAnswers = !!lead.assessmentAnswers && "educationPathway" in lead.assessmentAnswers;
+  const assessmentEntries = isPmpAnswers
+    ? []
+    : ASSESSMENT_QUESTIONS.filter((q) => !BRIEF_CONSUMED_KEYS.has(q.key))
+        .map((q) => ({
+          label: q.label,
+          value: lead.assessmentAnswers?.[q.key],
+        }))
+        .filter((e) => e.value !== undefined && e.value !== null && e.value !== "");
 
   // Phase 2 — PMP eligibility, facts only. Recomputed live from the
   // stored assessmentAnswers (never persisted separately — see
@@ -85,7 +105,10 @@ export function LeadItem({
   // PMP eligibility question set rather than the generic assessment
   // questions above (detected by the presence of educationPathway, a
   // key unique to the PMP question set — see lib/pmp-eligibility.ts).
-  const pmpFacts = lead.assessmentAnswers && "educationPathway" in lead.assessmentAnswers ? checkPmpEligibility(lead.assessmentAnswers) : null;
+  const pmpFacts = isPmpAnswers ? checkPmpEligibility(lead.assessmentAnswers) : null;
+  // Phase 3 — Conversation Brief, same rules as ProspectItem.tsx:
+  // built only from what was actually captured, never rendered empty.
+  const brief = buildConversationBrief(lead.assessmentAnswers);
 
   return (
     <Card style={{ padding: "var(--v2-space-4)" }}>
@@ -136,6 +159,49 @@ export function LeadItem({
           )}
         </div>
       </div>
+      {brief.hasContent && (
+        <div
+          style={{
+            marginTop: "var(--v2-space-3)",
+            padding: "var(--v2-space-3)",
+            background: "var(--v2-surface-sunken)",
+            border: "1px solid var(--v2-border)",
+            borderRadius: "var(--v2-radius, 8px)",
+          }}
+        >
+          <div style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: "var(--v2-text-faint)", marginBottom: 6 }}>
+            Conversation Brief
+          </div>
+          <div style={{ display: "grid", gap: 4, fontSize: "0.82rem" }}>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>Why they came: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{brief.whyTheyCame ?? "Not yet established"}</span>
+            </div>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>What they told us: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{brief.mainChallenge ?? "Not yet established"}</span>
+            </div>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>What they've tried: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{brief.whatTried ?? "Not yet established"}</span>
+            </div>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>Who this is for: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{brief.who ?? "Not yet established"}</span>
+            </div>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>Timing: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{brief.timing ?? "Not yet established"}</span>
+            </div>
+            {brief.categoryContext && (
+              <div>
+                <span style={{ color: "var(--v2-text-muted)" }}>Also noted: </span>
+                <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{brief.categoryContext}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {assessmentEntries.length > 0 && (
         <div
           style={{

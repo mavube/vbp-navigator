@@ -1,75 +1,48 @@
-# Invoice Reconciliation — Design/Migration Pass
+# Phase 3 — Conversation Brief + Follow-up Task on Promotion
 
-Sits between Phase 1 (intake backbone) and Phase 2 (PMP eligibility) in the `/start` Warm Lead Intelligence build order, per the decisions recorded in `vbp-navigator-os-start-warm-lead-intelligence-plan.md`. This was decided, not part of the six numbered phases — a prerequisite for Phase 5's invoice-paid trigger, which needs a single trustworthy source of truth for revenue before it can fire on it.
+Part of the `/start` Warm Lead Intelligence plan. Scope, per the confirmed build order:
 
-## The problem
+> "A templated summary built only from what was actually captured ('why they came,' 'what they told us,' 'what they tried,' 'not yet established' for anything unanswered — never invented). Promoting a prospect to a Lead also creates one real Task (reusing the existing Tasks table — it already has `assigneeName` and `dueDate`) whose title is the next action and whose due date is the stated timing, rather than inventing a parallel 'follow-up' concept next to Tasks."
 
-Two disconnected tables both called themselves "invoices":
+## What this ships
 
-- **`documents`** (Commercial Documents) — the customer-facing proposal → quotation → invoice chain Sales actually uses. Tied to `customerId`/`engagementId`/`leadId`/`serviceId`, carries a real `currency` field, `amount`, and `paymentStatus`. This is what `CustomerDetail.tsx` reads for a customer's billing history.
-- **`invoices`** (Budget module) — a staff-facing manual entry table with `direction: "incoming"|"outgoing"`. No `customerId`, no `currency` field at all. `lib/rollups.ts` summed this table's `outgoing` rows into the org-wide `revenueOutgoingTotal`/`revenueCollectedTotal` — meaning the Dashboard's revenue numbers never reflected what Sales was actually invoicing through Commercial Documents.
+**Conversation Brief** — a small panel, shown on both the Prospect card and the Lead card, built purely from whatever the visitor actually answered on `/start`. Six lines: why they came, what they told us (the challenge), what they've tried, who it's for, timing, and anything else noted. A field nobody answered reads "Not yet established" — never a guess, never left blank. It's computed live from the stored `assessmentAnswers` every time the page renders (`lib/conversation-brief.ts`'s `buildConversationBrief()`), nothing new is persisted.
 
-A customer invoice created through the real sales chain and one typed into Budget as a manual "outgoing" row looked the same to a user but were invisible to each other.
+Three different question sets can produce those answers — general discovery, the older generic certification questions, and the PMP eligibility questions — each using its own field names for the same underlying idea (e.g. "why they came" is `desiredOutcome` on one path, `motivation` on another). `buildConversationBrief()` is the one place that reconciles all three into a single shape, so the Lead and Prospect pages only need to know about the Brief, not about which form the visitor happened to fill in.
 
-## The fix
+**Follow-up Task on promotion** — promoting a Prospect to a Lead now also creates one real Task in the existing Tasks table:
+- Title: `Follow up with <name> — <product>`
+- Description: the full Conversation Brief text, plus the PMP eligibility statement when applicable — so whoever's assigned the follow-up has everything without needing to click into the Lead first
+- Due date: a heuristic off the visitor's own stated timing — someone who said "Immediately" gets a due date 1 day out; "Later" or "Just exploring" gets 21 days; anything unrecognized or unstated defaults to a week out. The offset is always from *today*, not from the visitor's stated start date — the point is when the follow-up call should happen, not when they want to start.
 
-`documents`' invoice rows (`doc_type = 'invoice'`) are now the one source of truth for revenue owed to and collected by VBP. The `invoices` table narrows to incoming (vendor bills) only, which was always its more clearly-scoped role.
+Tasks has no `leadId` column (a deliberate earlier decision — Tasks/Requests stay internal capacity tracking, no schema change for this). So there's no durable link from the Lead back to the Task it spawned. The Task's own `description` carries the full context instead, and the Prospect page shows a one-time "→ Follow-up task created — see Tasks" link right after promotion (same pattern as the existing "→ Customer record created" link that appears after winning a Lead) — both are local component state, shown once, since neither table can look the link back up later.
 
-### `lib/rollups.ts`
+## Two bugs found and fixed along the way
 
-Both revenue queries — the per-service one inside `getServiceRollups()` and the org-wide one inside `getFiscalYearSummary()` — now read `documents WHERE doc_type = 'invoice' AND amount IS NOT NULL` instead of `invoices WHERE direction = 'outgoing'`. `revenueCollectedTotal` now narrows on `payment_status = 'paid'` (documents' column) instead of `status = 'paid'` (invoices' column) — same meaning, different table. `ensureAllSchemas()` now forces `documents` into existence via `ensureDocumentsSchema()` instead of `ensureInvoicesSchema()`, so a fresh SQLite dev database doesn't need a prior Commercial Documents write before rollups can query it.
+**1. General-discovery answers were being silently dropped at intake, for every submission since Phase 1.** `app/api/public/org/[slug]/prospects/route.ts`'s POST handler only captured `assessmentAnswers` when `source === "assessment"`. But the general-discovery path (the "why/what/who/timing" questions this phase's Brief is built to read) always sends `source: "apply"` — so every one of those five structured answers was accepted with a 201 and then thrown away, never actually stored. Nothing downstream — Prospect review, promotion, and now the Conversation Brief — ever saw them. This had been shipping since Phase 1; it went unnoticed because Phase 1's own verification only checked for a 201 response, never fetched the prospect back to confirm the answers round-tripped through storage. Fixed by capturing `assessmentAnswers` whenever the client sends them, for either source.
 
-Known limitation, carried over rather than introduced by this change: amounts are summed as plain numbers regardless of each document's `currency` field, so this is only correct for an org invoicing in a single currency. Fixing that is unscoped here — flagging it plainly rather than silently inheriting it.
+**2. Duplicate panels.** The Conversation Brief was added additively alongside two older panels (the generic-assessment "for the follow-up call" list on the Lead page, and the raw `key: value` answer dump on the Prospect page) that read the same underlying `assessmentAnswers` object with no awareness of what the Brief already shows. Two overlapping cases surfaced this in testing:
+- A PMP lead's answers leaked one stray "What's prompting you to pursue this now?" line into the old generic-assessment panel, because this phase's two new PMP supplementary questions (added so PMP leads have real Brief content instead of "Not yet established" across the board) reuse the `motivation` key that panel also reads.
+- A discovery-path prospect ("Baraka Discovery" in testing) showed the exact same six answers twice — once in the new Brief panel, once in the raw answer dump immediately below it.
 
-### `components/budget/InvoicesSection.tsx`
+Fixed with `lib/conversation-brief.ts`'s new `BRIEF_CONSUMED_KEYS` — the set of raw answer keys the Brief already reads — which both `ProspectItem.tsx` and `LeadItem.tsx` now filter their legacy panels against, key by key. This keeps those older panels useful for the fields the Brief genuinely doesn't cover (e.g. a hypothetical old-style lead's `experience`/`certification` answers) while eliminating the overlap, rather than just hiding one panel outright and losing that residual information.
 
-The direction picker is gone — this form only creates incoming (vendor bill) rows now. The class/lead linkage picker (only ever meaningful for an outgoing invoice) is gone with it. The party field's placeholder is always "Vendor". Historical outgoing rows, if any exist from before this change, still display in the list below with their original `· outgoing` label and any linked class/lead — nothing here deletes existing data.
+## Files changed
 
-### `app/api/invoices/route.ts`
+- `lib/conversation-brief.ts` (new) — `buildConversationBrief()`, `formatConversationBriefText()`, `suggestFollowUpDueDate()`, `BRIEF_CONSUMED_KEYS`
+- `lib/discovery-questions.ts` — extracted `START_TIMING_OPTIONS` as a named export, reused by the PMP question set
+- `lib/pmp-eligibility.ts` — two new supplementary questions (`startTiming`, `motivation`) so PMP leads have real Brief content; carry zero weight in the eligibility computation itself
+- `lib/db-prospects.ts` — `promoteProspectToLead()` now also creates the follow-up Task
+- `app/api/prospects/[id]/promote/route.ts` — returns the new `taskId`
+- `app/api/public/org/[slug]/prospects/route.ts` — bug fix: captures `assessmentAnswers` for either source (see above)
+- `components/prospects/ProspectItem.tsx` — Conversation Brief panel, one-time "task created" link, `BRIEF_CONSUMED_KEYS` filtering
+- `components/pipeline/LeadItem.tsx` — Conversation Brief panel, `BRIEF_CONSUMED_KEYS` filtering (both the PMP short-circuit and the per-key filter for the generic-assessment case)
 
-POST now rejects `direction: "outgoing"` with a 400 and a message pointing to Commercial Documents, closing the gap at the API level rather than only in the one UI that used to expose it.
+## Verification
 
-### `lib/db-invoices.ts`
-
-Header comment rewritten to describe the narrowed, incoming-only scope going forward, and to explain why `InvoiceDirection` still includes `"outgoing"` as a type (so historical rows keep reading correctly) even though nothing should create a new one.
-
-### `app/budget/page.tsx`
-
-The Budget page's own description said "both incoming (vendor bills) and outgoing (billing customers)" — now stale. Updated to say billing customers happens in Commercial Documents.
-
-## Not a schema change
-
-No migration. The `invoices` table isn't dropped or altered — it keeps existing rows (including any historical `outgoing` ones) exactly as they are; it simply stops being written to with `direction: "outgoing"` and stops being read for revenue.
-
-## One known, accepted side effect
-
-`lib/db-org-memory.ts` stores daily snapshots of `revenueOutgoingTotal`/`revenueCollectedTotal` for historical trend computation (read by `lib/ai-context.ts`, narrated by `app/api/ai/observe/route.ts`). Switching the revenue source will cause a one-time discontinuity in that trend the day this ships — acceptable given Truth Mode (production currently has no revenue data in either table), but worth stating honestly rather than leaving implicit.
-
-## Apply
-
-Copy all five files into their matching paths. No migration, no env var changes, no other files touched.
-
-## Verified before packaging
-
-- `npx tsc --noEmit` and `npm run build` both clean.
-- **11 assertions** against a freshly reset local database:
-  - Two invoice documents created directly on `documents` (500,000 + 300,000), one proposal document (999,999, deliberately excluded from revenue).
-  - One invoice marked paid via `recordPayment`.
-  - `getServiceRollups()` returns `revenueOutgoingTotal: 800000`, `revenueCollectedTotal: 500000` for the service — proposal correctly excluded.
-  - `getFiscalYearSummary()` returns the same totals for the current fiscal year.
-  - `/api/rollups` (the real HTTP route, not just the function) returns matching numbers.
-  - `POST /api/invoices` with `direction: "outgoing"` now returns 400 with an error message pointing to Commercial Documents.
-  - `POST /api/invoices` with `direction: "incoming"` still succeeds (201).
-  - The new incoming invoice does **not** move `revenueOutgoingTotal` — confirming the old table is now fully disconnected from revenue reporting.
-- Playwright screenshot of the Budget → Invoices tab: no direction dropdown, no linkage picker, "Vendor" placeholder, and the historical incoming invoice from the test script displaying correctly with its `· incoming` label.
-- Playwright screenshot of the Dashboard: "Revenue invoiced 800,000", "Revenue collected 500,000", "Net 500,000" — all sourced from Commercial Documents, confirming the Budget-table incoming invoice created in the same test run had no effect on these numbers.
-- Full route regression sweep across 18 routes (core app pages, `/start/vbp`, and the `/apply/vbp`/`/assess/vbp` redirect stubs) — all `200` except the two redirect stubs at their expected `307`.
-
-## Not done yet / carried forward
-
-Still ahead, in order, per the plan doc:
-- Phase 2 — PMP eligibility, facts only (the four real PMI pathways checked against PMI's actual requirements, no score).
-- Phase 3 — Conversation Brief + a real Task created on promotion, on the Lead page.
-- Phase 4 — existing-customer detection moved from promotion-time to `/start` submission-time.
-- Phase 5 — the post-conversion opportunity engine (Engagement-completed, invoice-paid, class-completed, and organization-level grouping triggers) — now unblocked by this pass, since it needs exactly this single source of truth for the invoice-paid trigger.
-- Phase 6 — card-based visual pass across the Customer/Lead pages, and the "Room to grow with [Name]" copy rewrite on the Customer page's suggestions section.
+- `npx tsc --noEmit` — clean
+- `npm run build` — clean
+- Unit test (`verify_conversation_brief_unit.ts`, 24 assertions) — all pass: discovery/generic/PMP key mapping, empty-answers handling, text rendering, due-date heuristic ordering
+- End-to-end test (`verify_phase3_e2e.js`, 17 assertions) — all pass against a freshly wiped local database: PMP and discovery prospects created, promoted, Task title/description/due-date content confirmed correct, non-PMP tasks confirmed to carry no PMP eligibility line, Lead's `assessmentAnswers` confirmed to carry through unchanged from the Prospect
+- Full ~18-route regression sweep — all 200
+- Visual check via screenshots of `/pipeline` and `/prospects` — confirmed no duplicate panels anywhere, including the two cases that originally surfaced the bug

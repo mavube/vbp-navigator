@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
 import type { Prospect, ProspectStatus, ServiceOption } from "@/components/prospects/types";
 import { checkPmpEligibility } from "@/lib/pmp-eligibility";
+import { buildConversationBrief, BRIEF_CONSUMED_KEYS } from "@/lib/conversation-brief";
 
 type ProspectAction = "reviewed" | "declined" | "promote";
 
@@ -45,6 +47,12 @@ export function ProspectItem({
   // see it after the promote button disappears (the prospect moves to
   // "Closed").
   const [duplicateWarning, setDuplicateWarning] = useState("");
+  // Phase 3 — promoting also creates a follow-up Task (see
+  // lib/db-prospects.ts's promoteProspectToLead). Tasks has no leadId
+  // to look this back up later, so — same reasoning as LeadItem.tsx's
+  // wonCustomerId — this is surfaced once, right after promotion, from
+  // local state only.
+  const [createdTaskId, setCreatedTaskId] = useState<string | null>(null);
 
   const cvsServices = services.filter((s) => s.type === "cvs");
 
@@ -85,6 +93,7 @@ export function ProspectItem({
         const body = await res.json();
         onChange({ status: "promoted", leadId: body.leadId, serviceId });
         if (body.duplicateWarning) setDuplicateWarning(body.duplicateWarning);
+        if (body.taskId) setCreatedTaskId(body.taskId);
       } else {
         const body = await res.json().catch(() => ({}));
         setError(body.error || "Couldn't promote");
@@ -94,12 +103,23 @@ export function ProspectItem({
     }
   }
 
-  const answerEntries = Object.entries(prospect.assessmentAnswers || {}).filter(([, v]) => v);
+  // Phase 3 fix: excludes any key Conversation Brief already shows
+  // above (see lib/conversation-brief.ts's BRIEF_CONSUMED_KEYS) — a
+  // discovery-path prospect's answers were otherwise rendering twice,
+  // once in the Brief panel and again here in raw key:value form.
+  const answerEntries = Object.entries(prospect.assessmentAnswers || {}).filter(
+    ([k, v]) => v && !BRIEF_CONSUMED_KEYS.has(k)
+  );
   // Phase 2 — PMP eligibility, facts only. Same detection and
   // computation as LeadItem.tsx (see lib/pmp-eligibility.ts) — a
   // Prospect who answered the PMP eligibility questions gets the same
   // facts panel here, before promotion, not just after.
   const pmpFacts = prospect.assessmentAnswers && "educationPathway" in prospect.assessmentAnswers ? checkPmpEligibility(prospect.assessmentAnswers) : null;
+  // Phase 3 — Conversation Brief. Built only from what was actually
+  // captured (see lib/conversation-brief.ts) — never rendered when
+  // nothing was captured (hasContent false), same "no empty panel"
+  // discipline as the Assessment/PMP-facts panels below it.
+  const brief = buildConversationBrief(prospect.assessmentAnswers);
 
   return (
     <Card style={{ padding: "var(--v2-space-4)" }}>
@@ -132,6 +152,50 @@ export function ProspectItem({
 
       {prospect.message && (
         <p style={{ fontSize: "0.85rem", color: "var(--v2-text-muted)", margin: "var(--v2-space-2) 0 0" }}>{prospect.message}</p>
+      )}
+
+      {brief.hasContent && (
+        <div
+          style={{
+            margin: "var(--v2-space-2) 0 0",
+            padding: "var(--v2-space-3)",
+            background: "var(--v2-surface-sunken)",
+            border: "1px solid var(--v2-border)",
+            borderRadius: "var(--v2-radius, 8px)",
+          }}
+        >
+          <div style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: "var(--v2-text-faint)", marginBottom: 6 }}>
+            Conversation Brief
+          </div>
+          <div style={{ display: "grid", gap: 4, fontSize: "0.82rem" }}>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>Why they came: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{brief.whyTheyCame ?? "Not yet established"}</span>
+            </div>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>What they told us: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{brief.mainChallenge ?? "Not yet established"}</span>
+            </div>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>What they've tried: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{brief.whatTried ?? "Not yet established"}</span>
+            </div>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>Who this is for: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{brief.who ?? "Not yet established"}</span>
+            </div>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>Timing: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{brief.timing ?? "Not yet established"}</span>
+            </div>
+            {brief.categoryContext && (
+              <div>
+                <span style={{ color: "var(--v2-text-muted)" }}>Also noted: </span>
+                <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{brief.categoryContext}</span>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {pmpFacts ? (
@@ -225,6 +289,15 @@ export function ProspectItem({
             {pendingAction === "declined" ? "Declining…" : "Decline"}
           </button>
         </div>
+      )}
+
+      {createdTaskId && (
+        <p style={{ fontSize: "0.75rem", color: "var(--v2-text-faint)", margin: "8px 0 0" }}>
+          → Follow-up task created — see{" "}
+          <Link href="/tasks" style={{ color: "var(--v2-accent)" }}>
+            Tasks
+          </Link>
+        </p>
       )}
 
       {error && <p style={{ color: "var(--v2-danger)", fontSize: "0.8rem", margin: "8px 0 0" }}>{error}</p>}

@@ -14,12 +14,20 @@
 // intake instead of GDC building a separate questionnaire per product.
 import { type AssessmentQuestion } from "@/lib/assessment-questions";
 
+// Pulled out for reuse — Phase 3 (Conversation Brief) also asks a
+// timing question on the PMP eligibility path (lib/pmp-eligibility.ts),
+// and a Task's suggested due date is computed from whichever of these
+// values was given (lib/conversation-brief.ts's suggestFollowUpDueDate).
+// One vocabulary for "when do you plan to start," not a second one
+// invented per question set.
+export const START_TIMING_OPTIONS = ["Immediately", "Within 1 month", "1–3 months", "3–6 months", "Later", "Not sure"];
+
 export const DISCOVERY_QUESTIONS: AssessmentQuestion[] = [
   { key: "desiredOutcome", label: "What are you trying to achieve?", type: "text" },
   { key: "mainChallenge", label: "What's the main challenge you're facing?", type: "text" },
   { key: "whatTried", label: "What have you tried so far?", type: "text" },
   { key: "whoFor", label: "Who is this for?", type: "select", options: ["Myself", "My team", "My organization", "My client/customer"] },
-  { key: "startTiming", label: "When do you plan to start?", type: "select", options: ["Immediately", "Within 1 month", "1–3 months", "3–6 months", "Later", "Not sure"] },
+  { key: "startTiming", label: "When do you plan to start?", type: "select", options: START_TIMING_OPTIONS },
 ];
 
 // At most ONE extra question, chosen by the selected catalog item's own
