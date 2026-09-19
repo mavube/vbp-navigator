@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
-import type { ServiceOption, Invoice, InvoiceDirection, InvoiceStatus, InvoiceLineItem, ClassOption, LeadOption } from "@/components/budget/types";
+import type { ServiceOption, Invoice, InvoiceStatus, InvoiceLineItem, ClassOption, LeadOption } from "@/components/budget/types";
 
 const STATUS_TONE: Record<InvoiceStatus, "neutral" | "success" | "danger"> = {
   unpaid: "neutral",
@@ -24,13 +24,15 @@ export function InvoicesSection({ services, filterServiceId }: { services: Servi
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Outgoing (customer-facing) invoices now live in Commercial Documents
+  // — the proposal→quotation→invoice chain Sales uses — not here. This
+  // form only creates incoming (vendor bill) rows going forward; see
+  // the reconciliation note on lib/rollups.ts's revenue query for why.
+  // Historical outgoing rows, if any exist, still display below.
   const [serviceId, setServiceId] = useState("");
-  const [direction, setDirection] = useState<InvoiceDirection>("outgoing");
   const [party, setParty] = useState("");
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [classId, setClassId] = useState("");
-  const [leadId, setLeadId] = useState("");
   // v3.0 roadmap Phase 10 (Cluster C) — line items were captured by the
   // API since Phase 5 but never exposed on this form; a flat amount is
   // still the default (most invoices are simple), with line items as an
@@ -85,13 +87,11 @@ export function InvoicesSection({ services, filterServiceId }: { services: Servi
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           serviceId,
-          direction,
+          direction: "incoming",
           party,
           amount: Number(amount),
           lineItems: showLineItems ? validLines : undefined,
           dueDate: dueDate || undefined,
-          classId: direction === "outgoing" && classId ? classId : undefined,
-          leadId: direction === "outgoing" && leadId ? leadId : undefined,
         }),
       });
       if (!res.ok) {
@@ -103,8 +103,6 @@ export function InvoicesSection({ services, filterServiceId }: { services: Servi
       setParty("");
       setAmount("");
       setDueDate("");
-      setClassId("");
-      setLeadId("");
       setShowLineItems(false);
       setLines([{ ...BLANK_LINE }]);
     } catch (err) {
@@ -114,8 +112,6 @@ export function InvoicesSection({ services, filterServiceId }: { services: Servi
     }
   }
 
-  const serviceClasses = classes.filter((c) => c.serviceId === serviceId);
-  const serviceLeads = leads.filter((l) => l.serviceId === serviceId);
   const canSubmit = !!serviceId && !!party.trim() && (showLineItems ? validLines.length > 0 : !!amount);
 
   async function markPaid(id: string) {
@@ -139,18 +135,14 @@ export function InvoicesSection({ services, filterServiceId }: { services: Servi
       <Card>
         <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-3)" }}>
           <div style={{ display: "flex", gap: "var(--v2-space-2)", flexWrap: "wrap" }}>
-            <select value={serviceId} onChange={(e) => { setServiceId(e.target.value); setClassId(""); setLeadId(""); }} required className="v2-input" style={{ maxWidth: 220 }}>
+            <select value={serviceId} onChange={(e) => setServiceId(e.target.value)} required className="v2-input" style={{ maxWidth: 220 }}>
               <option value="" disabled>Service…</option>
               {services.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
-            <select value={direction} onChange={(e) => setDirection(e.target.value as InvoiceDirection)} className="v2-input" style={{ maxWidth: 140 }}>
-              <option value="outgoing">Outgoing</option>
-              <option value="incoming">Incoming</option>
-            </select>
             <Input
-              placeholder={direction === "outgoing" ? "Customer" : "Vendor"}
+              placeholder="Vendor"
               value={party}
               onChange={(e) => setParty(e.target.value)}
               required
@@ -167,32 +159,6 @@ export function InvoicesSection({ services, filterServiceId }: { services: Servi
               style={{ maxWidth: 160 }}
             />
           </div>
-
-          {/* v3.0 roadmap Phase 10 — linkage picker: the API has taken
-              classId/leadId since Phase 5 (Section 6), this just exposes
-              it. Only meaningful for an outgoing invoice (billing a
-              customer for a Class or a Lead's engagement) — an incoming
-              vendor bill links to an Expense instead, set elsewhere. */}
-          {direction === "outgoing" && serviceId && (serviceClasses.length > 0 || serviceLeads.length > 0) && (
-            <div style={{ display: "flex", gap: "var(--v2-space-2)", flexWrap: "wrap" }}>
-              {serviceClasses.length > 0 && (
-                <select value={classId} onChange={(e) => setClassId(e.target.value)} className="v2-input" style={{ maxWidth: 240 }}>
-                  <option value="">Link to a class (optional)…</option>
-                  {serviceClasses.map((c) => (
-                    <option key={c.id} value={c.id}>{c.title}</option>
-                  ))}
-                </select>
-              )}
-              {serviceLeads.length > 0 && (
-                <select value={leadId} onChange={(e) => setLeadId(e.target.value)} className="v2-input" style={{ maxWidth: 240 }}>
-                  <option value="">Link to a lead (optional)…</option>
-                  {serviceLeads.map((l) => (
-                    <option key={l.id} value={l.id}>{l.contactName}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
 
           {showLineItems ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--v2-space-2)", padding: "var(--v2-space-3)", background: "var(--v2-surface-sunken)", borderRadius: "var(--v2-radius-sm)" }}>

@@ -1,58 +1,75 @@
-# /start Warm Lead Intelligence — Phase 1 (Intake Backbone)
+# Invoice Reconciliation — Design/Migration Pass
 
-First of six phases from `vbp-navigator-os-start-warm-lead-intelligence-plan.md` (the project doc capturing the full plan and its decisions). Replaces `/start`'s binary Training/Consulting menu with the real catalog-driven entry, and replaces the one-size "anything else?" textarea with the five-question general discovery pattern plus a category-specific adaptive question.
+Sits between Phase 1 (intake backbone) and Phase 2 (PMP eligibility) in the `/start` Warm Lead Intelligence build order, per the decisions recorded in `vbp-navigator-os-start-warm-lead-intelligence-plan.md`. This was decided, not part of the six numbered phases — a prerequisite for Phase 5's invoice-paid trigger, which needs a single trustworthy source of truth for revenue before it can fire on it.
 
-## What changed
+## The problem
 
-### The entry menu is now catalog-driven, not a hardcoded binary choice
+Two disconnected tables both called themselves "invoices":
 
-`/start` used to offer exactly two buttons — Training & Certification, or Consulting & Advisory — decided by a hardcoded `TRAINING_OFFERING_TYPES` set. Now it shows one button per real business-line `category` actually present in the Products & Services Catalog (up to the five real values the catalog already suggests: Training & Capability Development, Project Management & Implementation Advisory, Business Process & Value Advisory, Business Transformation & ICT Advisory, Technology & Digital Solutions), plus Certification pulled out as its own button (any item with `offeringType = "Certification Program"`, regardless of category), plus "I'm not sure" for a visitor who doesn't know which they need. A category with zero active catalog items simply doesn't show a button — nothing hardcoded, nothing to keep in sync by hand as Diallo adds real offerings.
+- **`documents`** (Commercial Documents) — the customer-facing proposal → quotation → invoice chain Sales actually uses. Tied to `customerId`/`engagementId`/`leadId`/`serviceId`, carries a real `currency` field, `amount`, and `paymentStatus`. This is what `CustomerDetail.tsx` reads for a customer's billing history.
+- **`invoices`** (Budget module) — a staff-facing manual entry table with `direction: "incoming"|"outgoing"`. No `customerId`, no `currency` field at all. `lib/rollups.ts` summed this table's `outgoing` rows into the org-wide `revenueOutgoingTotal`/`revenueCollectedTotal` — meaning the Dashboard's revenue numbers never reflected what Sales was actually invoicing through Commercial Documents.
 
-Each button's description is the real catalog item names in that category (up to three, "…" if more) — not hand-written per-category copy that would just be a second thing to maintain.
+A customer invoice created through the real sales chain and one typed into Budget as a manual "outgoing" row looked the same to a user but were invisible to each other.
 
-### "I'm not sure" shows everything
+## The fix
 
-Picking it drops the category filter entirely — the product picker shows every active catalog item, including Certification items. This is deliberately the simple version of "guided discovery": rather than building a recommendation classifier, it just removes the barrier and lets the same discovery questions do their job. Worth revisiting later if it doesn't work well enough in practice.
+`documents`' invoice rows (`doc_type = 'invoice'`) are now the one source of truth for revenue owed to and collected by VBP. The `invoices` table narrows to incoming (vendor bills) only, which was always its more clearly-scoped role.
 
-### The general discovery pattern replaces the single textarea
+### `lib/rollups.ts`
 
-Every non-Certification item now asks the same five core questions (new `lib/discovery-questions.ts`, `DISCOVERY_QUESTIONS`): what you're trying to achieve, the main challenge, what's been tried, who it's for, and start timing — plus at most one adaptive question chosen by the selected item's `category` (`CATEGORY_ADAPTIVE_QUESTION`, keyed by the exact category string). A category with no adaptive question defined simply skips that question — never a placeholder. The optional "anything else?" field is kept, now positioned after the structured questions rather than being the only question asked.
+Both revenue queries — the per-service one inside `getServiceRollups()` and the org-wide one inside `getFiscalYearSummary()` — now read `documents WHERE doc_type = 'invoice' AND amount IS NOT NULL` instead of `invoices WHERE direction = 'outgoing'`. `revenueCollectedTotal` now narrows on `payment_status = 'paid'` (documents' column) instead of `status = 'paid'` (invoices' column) — same meaning, different table. `ensureAllSchemas()` now forces `documents` into existence via `ensureDocumentsSchema()` instead of `ensureInvoicesSchema()`, so a fresh SQLite dev database doesn't need a prior Commercial Documents write before rollups can query it.
 
-The Certification path is untouched this round — still the same four questions from `lib/assessment-questions.ts` (PMP eligibility scoring is Phase 2, not this one).
+Known limitation, carried over rather than introduced by this change: amounts are summed as plain numbers regardless of each document's `currency` field, so this is only correct for an org invoicing in a single currency. Fixing that is unscoped here — flagging it plainly rather than silently inheriting it.
 
-### Contact capture moved to the end
+### `components/budget/InvoicesSection.tsx`
 
-Per the plan's "let the visitor explain the need first, then capture the contact needed for the next step" — full name, email, and phone now appear after the discovery/assessment questions, immediately before the Turnstile widget and submit button, instead of at the top of the form.
+The direction picker is gone — this form only creates incoming (vendor bill) rows now. The class/lead linkage picker (only ever meaningful for an outgoing invoice) is gone with it. The party field's placeholder is always "Vendor". Historical outgoing rows, if any exist from before this change, still display in the list below with their original `· outgoing` label and any linked class/lead — nothing here deletes existing data.
 
-### No schema or API changes
+### `app/api/invoices/route.ts`
 
-Everything still lands in `prospects.assessment_answers`, already a flexible jsonb column — the five discovery answers and the one adaptive answer are just new keys in the same structure the Certification questions have always used. The public products endpoint already returned `category`; nothing needed to change there either.
+POST now rejects `direction: "outgoing"` with a 400 and a message pointing to Commercial Documents, closing the gap at the API level rather than only in the one UI that used to expose it.
 
-## Files
+### `lib/db-invoices.ts`
 
-- `lib/discovery-questions.ts` (new) — `DISCOVERY_QUESTIONS` (the five core questions) and `CATEGORY_ADAPTIVE_QUESTION` (one question per known category), same shared-definition pattern as `lib/assessment-questions.ts` so a later Conversation Brief (Phase 3) can reuse these exact labels.
-- `components/public/StartForm.tsx` (modified) — the entry menu, category/certification/not-sure routing, the reordered form, and the new question rendering. `Track`/`TRAINING_OFFERING_TYPES`/`trackFor` are gone, replaced by `EntryChoice`/`CATEGORY_ORDER`/`orderedCategories`.
+Header comment rewritten to describe the narrowed, incoming-only scope going forward, and to explain why `InvoiceDirection` still includes `"outgoing"` as a type (so historical rows keep reading correctly) even though nothing should create a new one.
+
+### `app/budget/page.tsx`
+
+The Budget page's own description said "both incoming (vendor bills) and outgoing (billing customers)" — now stale. Updated to say billing customers happens in Commercial Documents.
+
+## Not a schema change
+
+No migration. The `invoices` table isn't dropped or altered — it keeps existing rows (including any historical `outgoing` ones) exactly as they are; it simply stops being written to with `direction: "outgoing"` and stops being read for revenue.
+
+## One known, accepted side effect
+
+`lib/db-org-memory.ts` stores daily snapshots of `revenueOutgoingTotal`/`revenueCollectedTotal` for historical trend computation (read by `lib/ai-context.ts`, narrated by `app/api/ai/observe/route.ts`). Switching the revenue source will cause a one-time discontinuity in that trend the day this ships — acceptable given Truth Mode (production currently has no revenue data in either table), but worth stating honestly rather than leaving implicit.
 
 ## Apply
 
-Copy both files into their matching paths. No migration, no env var changes, no other files touched.
+Copy all five files into their matching paths. No migration, no env var changes, no other files touched.
 
 ## Verified before packaging
 
-- `npx tsc --noEmit` and `npm run build` both clean; `/start/[org]` still builds as a real route.
-- **9 assertions** against a freshly reset local database: 5 catalog items seeded across all five real categories plus one Certification item; public products endpoint confirmed to expose `category`/`offeringType` correctly with no price leaked; four submissions exercised — a Certification item (`source: "assessment"`), a Corporate Training item, a Project Management & Implementation Advisory item, and a Technology & Digital Solutions item (all `source: "apply"`, each carrying its own discovery answers including its category's specific adaptive-question key) — all 201. 9/9 passed.
-- Playwright screenshots at 1280px: the six-card entry menu (all five real categories plus Certification plus "I'm not sure", each showing real catalog item names), the general discovery form for a Project Management & Implementation Advisory item (all five core questions plus its adaptive question, contact fields at the bottom), the Certification path unchanged, the Technology & Digital Solutions item showing its own distinct adaptive question ("How are you currently handling this?" vs. the advisory categories' "What has this situation affected most?"), and "I'm not sure" confirmed to list all 5 products (6 `<option>` elements including the placeholder).
-- Mobile screenshot (390px) of the entry menu — no horizontal overflow, all six cards readable.
-- Full regression sweep across 12 routes (core app pages plus `/apply/vbp`, `/assess/vbp`, `/start/vbp`) — all `200`, confirming the existing `/apply`/`/assess` redirect stubs still work unchanged.
+- `npx tsc --noEmit` and `npm run build` both clean.
+- **11 assertions** against a freshly reset local database:
+  - Two invoice documents created directly on `documents` (500,000 + 300,000), one proposal document (999,999, deliberately excluded from revenue).
+  - One invoice marked paid via `recordPayment`.
+  - `getServiceRollups()` returns `revenueOutgoingTotal: 800000`, `revenueCollectedTotal: 500000` for the service — proposal correctly excluded.
+  - `getFiscalYearSummary()` returns the same totals for the current fiscal year.
+  - `/api/rollups` (the real HTTP route, not just the function) returns matching numbers.
+  - `POST /api/invoices` with `direction: "outgoing"` now returns 400 with an error message pointing to Commercial Documents.
+  - `POST /api/invoices` with `direction: "incoming"` still succeeds (201).
+  - The new incoming invoice does **not** move `revenueOutgoingTotal` — confirming the old table is now fully disconnected from revenue reporting.
+- Playwright screenshot of the Budget → Invoices tab: no direction dropdown, no linkage picker, "Vendor" placeholder, and the historical incoming invoice from the test script displaying correctly with its `· incoming` label.
+- Playwright screenshot of the Dashboard: "Revenue invoiced 800,000", "Revenue collected 500,000", "Net 500,000" — all sourced from Commercial Documents, confirming the Budget-table incoming invoice created in the same test run had no effect on these numbers.
+- Full route regression sweep across 18 routes (core app pages, `/start/vbp`, and the `/apply/vbp`/`/assess/vbp` redirect stubs) — all `200` except the two redirect stubs at their expected `307`.
 
 ## Not done yet / carried forward
 
-This is Phase 1 of 6 from the plan doc. Still ahead, in order:
-- The invoice-reconciliation design/migration pass (decided, not yet built) — needs to land before Phase 5's invoice-paid trigger depends on a single source of truth for revenue.
-- Phase 2 — PMP eligibility, facts only (the four real PMI inputs checked against PMI's actual four-pathway table, no score).
+Still ahead, in order, per the plan doc:
+- Phase 2 — PMP eligibility, facts only (the four real PMI pathways checked against PMI's actual requirements, no score).
 - Phase 3 — Conversation Brief + a real Task created on promotion, on the Lead page.
 - Phase 4 — existing-customer detection moved from promotion-time to `/start` submission-time.
-- Phase 5 — the post-conversion opportunity engine (Engagement-completed, invoice-paid, class-completed, and organization-level grouping triggers).
+- Phase 5 — the post-conversion opportunity engine (Engagement-completed, invoice-paid, class-completed, and organization-level grouping triggers) — now unblocked by this pass, since it needs exactly this single source of truth for the invoice-paid trigger.
 - Phase 6 — card-based visual pass across the Customer/Lead pages, and the "Room to grow with [Name]" copy rewrite on the Customer page's suggestions section.
-
-The Certification path's questions and framing are unchanged this round — still VBP's own intake questions, not PMI's real eligibility criteria (that's Phase 2).

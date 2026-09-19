@@ -1,8 +1,21 @@
 // Data layer for the `invoices` table — schema in
-// supabase/migrations/0006_phase5_budget.sql. Dual-direction per the
-// alignment doc Section 6: incoming (a vendor's bill to VBP, tied to an
-// Expense) and outgoing (VBP billing a customer, tied to a Class or
-// Lead) — both require serviceId regardless of direction.
+// supabase/migrations/0006_phase5_budget.sql.
+//
+// As of the invoice-reconciliation pass (2026-09), this table is
+// incoming-only going forward: a vendor's bill to VBP, tied to an
+// Expense. It originally also carried "outgoing" rows (VBP billing a
+// customer, tied to a Class or Lead) per the alignment doc Section 6,
+// but that duplicated what Commercial Documents' own
+// proposal→quotation→invoice chain already does — a second,
+// disconnected "invoice" concept with no customerId/engagementId and
+// no currency field. lib/rollups.ts's revenue numbers now read
+// Commercial Documents' invoice rows exclusively (see the note on its
+// revenue query), and app/api/invoices/route.ts's POST handler rejects
+// direction: "outgoing" at the API level. The `InvoiceDirection` type
+// still includes "outgoing" so any historical rows from before this
+// change keep reading and displaying correctly — nothing here deletes
+// existing data — but no new "outgoing" row should ever be created.
+// classId/leadId are likewise read-only vestiges of that old path.
 
 import { randomUUID } from "node:crypto";
 import { IS_POSTGRES, getPgPool, getSqliteDb } from "@/lib/db-driver";

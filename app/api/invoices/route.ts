@@ -43,9 +43,18 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(invoices);
 }
 
-// POST /api/invoices — incoming (a vendor's bill to VBP, tied to an
-// Expense) or outgoing (VBP billing a customer, tied to a Class/Lead —
-// no approval chain either way, per the alignment doc Section 6).
+// POST /api/invoices — incoming only: a vendor's bill to VBP, tied to
+// an Expense. Outgoing (VBP billing a customer) used to be created
+// here too, but that duplicated Commercial Documents' own
+// proposal→quotation→invoice chain under a second, disconnected
+// "invoice" concept with no customerId/engagementId and no currency
+// field — two sources of truth for the same idea. As of the invoice-
+// reconciliation pass (2026-09), lib/rollups.ts's revenue numbers read
+// Commercial Documents' invoice rows exclusively, so a customer
+// invoice created here would no longer count as revenue anywhere.
+// Rejecting "outgoing" at the API level (not just the form) closes
+// that gap for any other caller, not just the Budget UI. Existing
+// historical "outgoing" rows are left as-is and still readable via GET.
 // Gated the same as Expenses: that service's owner/contributor or an
 // Org Admin.
 export async function POST(req: NextRequest) {
@@ -55,8 +64,14 @@ export async function POST(req: NextRequest) {
   if (typeof body.serviceId !== "string" || !body.serviceId) {
     return NextResponse.json({ error: "serviceId is required" }, { status: 400 });
   }
+  if (body.direction === "outgoing") {
+    return NextResponse.json(
+      { error: "Outgoing invoices are created from Commercial Documents (proposal → quotation → invoice), not here." },
+      { status: 400 }
+    );
+  }
   if (typeof body.direction !== "string" || !VALID_DIRECTIONS.includes(body.direction as InvoiceDirection)) {
-    return NextResponse.json({ error: "direction must be 'incoming' or 'outgoing'" }, { status: 400 });
+    return NextResponse.json({ error: "direction must be 'incoming'" }, { status: 400 });
   }
   if (typeof body.party !== "string" || !body.party.trim()) {
     return NextResponse.json({ error: "party is required" }, { status: 400 });

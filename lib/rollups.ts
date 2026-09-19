@@ -33,7 +33,7 @@ import { ensureBudgetSchema } from "@/lib/db-budget";
 import { ensureExpensesSchema } from "@/lib/db-expenses";
 import { ensureCompensationSchema } from "@/lib/db-compensation";
 import { ensureBlockersSchema } from "@/lib/db-blockers";
-import { ensureInvoicesSchema } from "@/lib/db-invoices";
+import { ensureDocumentsSchema } from "@/lib/db-documents";
 import { adjacentFiscalYears, currentFiscalYear, fyLabel } from "@/lib/fiscal-year";
 import { computeServiceHealth, type HealthStatus, type ServiceHealthReason } from "@/lib/service-health";
 
@@ -54,7 +54,7 @@ async function ensureAllSchemas(): Promise<void> {
     ensureExpensesSchema(),
     ensureCompensationSchema(),
     ensureBlockersSchema(),
-    ensureInvoicesSchema(),
+    ensureDocumentsSchema(),
   ]);
 }
 
@@ -83,9 +83,17 @@ export interface ServiceRollup {
   // the actual "capacity" side of capacity *intelligence* (demand is
   // already derivable from the four *Open/*Active fields above — see
   // lib/service-health.ts); revenueOutgoingTotal/revenueCollectedTotal
-  // read the `invoices` table's outgoing direction (Budget module,
-  // Phase 5 of v2.0) — the "revenue" this org didn't have a number for
-  // anywhere before this phase.
+  // read the `documents` table's invoice rows (Commercial Documents —
+  // the proposal→quotation→invoice chain Sales actually uses, tied to
+  // customerId/engagementId/leadId/serviceId) rather than the Budget
+  // module's separate `invoices` table. The two tables looked like the
+  // same concept but weren't: `documents` is customer-facing and
+  // multi-currency-tagged (though summed here as a single amount — an
+  // inherited simplification, not new; see the note at the query
+  // below), while Budget's `invoices` table has since been narrowed to
+  // incoming (vendor bill) rows only and no longer represents money
+  // owed to this org. This is the "revenue" this org didn't have a
+  // trustworthy number for anywhere before this reconciliation pass.
   blockersOpen: number;
   blockersHighImpact: number;
   capacityPeople: number;
@@ -278,19 +286,24 @@ export async function getServiceRollups(orgId: string, fiscalYear?: number): Pro
     r.compensationNetPayTotal = Number(row.total) || 0;
   }
 
-  // Revenue — outgoing invoices only (VBP billing its own customers;
-  // see lib/db-invoices.ts / the alignment doc §6). Incoming invoices
-  // are vendor bills that become an Expense once recorded, so they're
-  // deliberately not summed here — counting both directions would mix
-  // money owed to VBP with money VBP owes, under one "revenue" number.
-  // revenueCollectedTotal narrows to status='paid' — the actually-in-
-  // hand subset of revenueOutgoingTotal, the same
-  // requested/actual distinction Budget already draws between
-  // budgetPendingAmount and budgetApprovedAmount.
+  // Revenue — invoice documents only (VBP billing its own customers via
+  // the Commercial Documents proposal→quotation→invoice chain; see
+  // lib/db-documents.ts). Proposals and quotations aren't summed here —
+  // only doc_type='invoice' rows represent money actually billed.
+  // amount IS NOT NULL excludes any invoice still missing a total (line
+  // items not yet priced). revenueCollectedTotal narrows to
+  // payment_status='paid' — the actually-in-hand subset of
+  // revenueOutgoingTotal, the same requested/actual distinction Budget
+  // already draws between budgetPendingAmount and budgetApprovedAmount.
+  // Known limitation, inherited from the table this replaces rather
+  // than introduced by this change: amounts are summed as plain
+  // numbers regardless of each document's `currency` field, so this is
+  // only correct for an org invoicing in a single currency. Fixing that
+  // is unscoped here.
   const revenueParams = fy ? [orgId, fy] : [orgId];
   const revenue = await groupedQuery(revenueParams, {
-    pg: `SELECT service_id, SUM(amount) AS total, SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS collected FROM invoices WHERE org_id = $1 AND direction = 'outgoing'${fy ? " AND substring(created_at::text from 1 for 4) = $2" : ""} GROUP BY service_id`,
-    sqlite: `SELECT service_id, SUM(amount) AS total, SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS collected FROM invoices WHERE org_id = ? AND direction = 'outgoing'${fy ? " AND substr(created_at,1,4) = ?" : ""} GROUP BY service_id`,
+    pg: `SELECT service_id, SUM(amount) AS total, SUM(CASE WHEN payment_status = 'paid' THEN amount ELSE 0 END) AS collected FROM documents WHERE org_id = $1 AND doc_type = 'invoice' AND amount IS NOT NULL${fy ? " AND substring(created_at::text from 1 for 4) = $2" : ""} GROUP BY service_id`,
+    sqlite: `SELECT service_id, SUM(amount) AS total, SUM(CASE WHEN payment_status = 'paid' THEN amount ELSE 0 END) AS collected FROM documents WHERE org_id = ? AND doc_type = 'invoice' AND amount IS NOT NULL${fy ? " AND substr(created_at,1,4) = ?" : ""} GROUP BY service_id`,
   });
   for (const row of revenue) {
     const r = get(row.service_id as string);
@@ -355,8 +368,8 @@ export async function getFiscalYearSummary(orgId: string, centerFy: number = cur
   }
 
   const revenue = await groupedQuery([orgId], {
-    pg: `SELECT substring(created_at::text from 1 for 4) AS fy, SUM(amount) AS total, SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS collected FROM invoices WHERE org_id = $1 AND direction = 'outgoing' GROUP BY fy`,
-    sqlite: `SELECT substr(created_at,1,4) AS fy, SUM(amount) AS total, SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS collected FROM invoices WHERE org_id = ? AND direction = 'outgoing' GROUP BY fy`,
+    pg: `SELECT substring(created_at::text from 1 for 4) AS fy, SUM(amount) AS total, SUM(CASE WHEN payment_status = 'paid' THEN amount ELSE 0 END) AS collected FROM documents WHERE org_id = $1 AND doc_type = 'invoice' AND amount IS NOT NULL GROUP BY fy`,
+    sqlite: `SELECT substr(created_at,1,4) AS fy, SUM(amount) AS total, SUM(CASE WHEN payment_status = 'paid' THEN amount ELSE 0 END) AS collected FROM documents WHERE org_id = ? AND doc_type = 'invoice' AND amount IS NOT NULL GROUP BY fy`,
   });
   for (const row of revenue) {
     const t = totals.get(Number(row.fy));
