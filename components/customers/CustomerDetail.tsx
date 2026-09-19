@@ -29,6 +29,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { CommentThread } from "@/components/collaboration/CommentThread";
 import { EngagementItem } from "@/components/customers/EngagementItem";
 import { DOCUMENT_TYPE_LABELS } from "@/lib/document-templates";
+import { isOverdueInvoice, daysOverdue } from "@/lib/commercial-doc-signals";
 import type {
   Customer,
   Engagement,
@@ -188,6 +189,14 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
     .reduce((sum, d) => sum + (d.amount ?? 0), 0);
   const invoiceCurrency = documents.find((d) => d.docType === "invoice")?.currency ?? "TZS";
 
+  // Post-Phase-G, third confirmed next step: a real talking point for
+  // a follow-up call, same spirit as the Lead assessment panel — "this
+  // customer has an invoice overdue" shouldn't require opening every
+  // invoice and doing the date math by hand. Computed from real
+  // dueDate/paymentStatus fields only; see lib/commercial-doc-signals.ts.
+  const overdueInvoices = documents.filter((d) => isOverdueInvoice(d));
+  const overdueTotal = overdueInvoices.reduce((sum, d) => sum + (d.amount ?? 0), 0);
+
   const ownedProductIds = new Set(engagements.map((e) => e.productServiceId).filter((id): id is string => !!id));
   const suggestions = products.filter((p) => p.active && !ownedProductIds.has(p.id)).slice(0, 5);
 
@@ -296,6 +305,9 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
               <div key={d.id} style={{ display: "flex", justifyContent: "space-between", gap: "var(--v2-space-2)", fontSize: "0.85rem", border: "1px solid var(--v2-border)", borderRadius: "var(--v2-radius)", padding: "8px 12px", flexWrap: "wrap" }}>
                 <div>
                   <Badge tone="warning">{DOCUMENT_TYPE_LABELS[d.docType as keyof typeof DOCUMENT_TYPE_LABELS] ?? d.docType}</Badge>{" "}
+                  {isOverdueInvoice(d) && (
+                    <Badge tone="danger">Overdue {daysOverdue(d.dueDate as string)}d</Badge>
+                  )}{" "}
                   <span style={{ marginLeft: 6 }}>{d.title}</span>
                 </div>
                 <div style={{ color: "var(--v2-text-faint)", fontSize: "0.75rem" }}>
@@ -316,6 +328,14 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
           <div><span style={{ color: "var(--v2-text-faint)" }}>Invoiced: </span><strong>{money(totalInvoiced, invoiceCurrency)}</strong></div>
           <div><span style={{ color: "var(--v2-text-faint)" }}>Paid: </span><strong>{money(totalPaid, invoiceCurrency)}</strong></div>
           <div><span style={{ color: "var(--v2-text-faint)" }}>Outstanding: </span><strong>{money(totalInvoiced - totalPaid, invoiceCurrency)}</strong></div>
+          {overdueInvoices.length > 0 && (
+            <div>
+              <span style={{ color: "var(--v2-danger)" }}>Overdue: </span>
+              <strong style={{ color: "var(--v2-danger)" }}>
+                {money(overdueTotal, invoiceCurrency)} ({overdueInvoices.length})
+              </strong>
+            </div>
+          )}
         </div>
         {documents.filter((d) => COMMERCIAL_TYPES.has(d.docType)).length === 0 ? (
           <p style={{ color: "var(--v2-text-muted)" }}>No proposals, quotations, or invoices for this customer yet.</p>
@@ -325,6 +345,9 @@ export function CustomerDetail({ customerId }: { customerId: string }) {
               <div key={d.id} style={{ display: "flex", justifyContent: "space-between", gap: "var(--v2-space-2)", fontSize: "0.85rem", border: "1px solid var(--v2-border)", borderRadius: "var(--v2-radius)", padding: "8px 12px", flexWrap: "wrap" }}>
                 <div>
                   <Badge tone="neutral">{DOCUMENT_TYPE_LABELS[d.docType as keyof typeof DOCUMENT_TYPE_LABELS] ?? d.docType}</Badge>{" "}
+                  {isOverdueInvoice(d) && (
+                    <Badge tone="danger">Overdue {daysOverdue(d.dueDate as string)}d</Badge>
+                  )}{" "}
                   <span style={{ marginLeft: 6 }}>{d.title}</span>
                 </div>
                 <div style={{ color: "var(--v2-text-faint)", fontSize: "0.75rem" }}>

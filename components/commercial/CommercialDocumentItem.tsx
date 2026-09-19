@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
+import { isOverdueInvoice, daysOverdue, isStalledDocument, daysSince } from "@/lib/commercial-doc-signals";
 import type { CommercialDocument, CommercialStatus, CommercialDocType } from "@/components/commercial/types";
 
 const TYPE_LABELS: Record<CommercialDocType, string> = { proposal: "Proposal", quotation: "Quotation", invoice: "Invoice" };
@@ -111,6 +112,14 @@ export function CommercialDocumentItem({
   const total = subtotal + taxTotal;
   const [expanded, setExpanded] = useState(false);
 
+  // Post-Phase-G, third confirmed next step — see
+  // lib/commercial-doc-signals.ts for what these mean and why. Overdue
+  // takes priority when both are somehow true (an invoice can't be
+  // "stalled" the same way a proposal/quotation can, since it isn't
+  // waiting on a yes/no).
+  const overdue = isOverdueInvoice(doc);
+  const stalled = !overdue && isStalledDocument(doc);
+
   return (
     <Card style={{ padding: "var(--v2-space-4)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: "var(--v2-space-3)", flexWrap: "wrap" }}>
@@ -131,6 +140,8 @@ export function CommercialDocumentItem({
               {doc.paymentStatus === "paid" ? "Paid" : doc.paymentStatus === "failed" ? "Payment failed" : "Unpaid"}
             </Badge>
           )}
+          {overdue && <Badge tone="danger">Overdue {daysOverdue(doc.dueDate as string)}d</Badge>}
+          {stalled && <Badge tone="warning">No response {daysSince(doc.sentAt as string)}d</Badge>}
         </div>
       </div>
 

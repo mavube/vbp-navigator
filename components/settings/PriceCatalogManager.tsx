@@ -37,6 +37,39 @@ interface ServiceOption {
   name: string;
 }
 
+// Post-Phase-G, third confirmed next step ("this is a decision-
+// supporting system, not QuickBooks or Tally"): the catalog previously
+// showed what GDC could charge for an offering, never what actually
+// happened with it. These two lightweight shapes carry only the real
+// fields needed to compute that — productServiceId (Engagement) and
+// catalogItemId (a commercial document's line item) are both existing
+// links, nothing new added to the schema.
+interface EngagementLite {
+  productServiceId: string | null;
+  status: string;
+}
+interface CommercialDocLite {
+  docType: string;
+  status: string;
+  paymentStatus: string;
+  currency: string;
+  lineItems: { catalogItemId?: string | null; quantity: number; unitAmount: number }[];
+}
+
+interface CatalogItemStats {
+  activeEngagements: number;
+  totalEngagements: number;
+  // Keyed by currency rather than summed across currencies — an item
+  // sold in both TZS and USD gets two real totals, never one
+  // meaningless blended number.
+  invoiced: Record<string, number>;
+  collected: Record<string, number>;
+}
+
+function money(amount: number, currency: string): string {
+  return `${currency} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 interface FormState {
   name: string;
   description: string;
@@ -135,6 +168,8 @@ function toPayload(f: FormState) {
 export function PriceCatalogManager() {
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [services, setServices] = useState<ServiceOption[]>([]);
+  const [engagements, setEngagements] = useState<EngagementLite[]>([]);
+  const [commercialDocs, setCommercialDocs] = useState<CommercialDocLite[]>([]);
   const [defaultCurrency, setDefaultCurrency] = useState("TZS");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -159,12 +194,20 @@ export function PriceCatalogManager() {
       fetch("/api/price-catalog", { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
       fetch("/api/org-settings", { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
       fetch("/api/services", { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
+      // Both fetched org-wide (not filtered per item) so per-item stats
+      // below are computed client-side from the same real link fields
+      // the rest of the app already relies on — Engagement.productServiceId
+      // and a line item's catalogItemId. No new endpoint needed.
+      fetch("/api/customers", { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
+      fetch("/api/commercial-documents", { cache: "no-store" }).then((res) => (res.ok ? res.json() : Promise.reject())),
     ])
-      .then(([catalogData, orgSettings, servicesData]) => {
+      .then(([catalogData, orgSettings, servicesData, customersData, commercialData]) => {
         setItems(catalogData);
         setDefaultCurrency(orgSettings.defaultCurrency || "TZS");
         setForm((f) => ({ ...f, currency: orgSettings.defaultCurrency || "TZS" }));
         setServices(servicesData.map((s: ServiceOption) => ({ id: s.id, name: s.name })));
+        setEngagements(customersData.engagements ?? []);
+        setCommercialDocs(commercialData ?? []);
         setError("");
       })
       .catch(() => setError("Couldn't load the Products & Services Catalog — try refreshing."))
@@ -175,6 +218,30 @@ export function PriceCatalogManager() {
 
   function serviceName(id: string): string {
     return services.find((s) => s.id === id)?.name ?? "Unknown";
+  }
+
+  // Only invoices that actually went somewhere real count — a draft or
+  // rejected invoice was never sent to the customer, so it isn't
+  // evidence this offering sold. "Collected" narrows further to
+  // paymentStatus === "paid", the same bar CustomerDetail.tsx's own
+  // totalPaid uses.
+  function statsFor(itemId: string): CatalogItemStats {
+    const activeEngagements = engagements.filter((e) => e.productServiceId === itemId && e.status === "active").length;
+    const totalEngagements = engagements.filter((e) => e.productServiceId === itemId).length;
+    const invoiced: Record<string, number> = {};
+    const collected: Record<string, number> = {};
+    for (const doc of commercialDocs) {
+      if (doc.docType !== "invoice" || doc.status === "draft" || doc.status === "rejected") continue;
+      const matched = doc.lineItems
+        .filter((li) => li.catalogItemId === itemId)
+        .reduce((sum, li) => sum + li.quantity * li.unitAmount, 0);
+      if (matched === 0) continue;
+      invoiced[doc.currency] = (invoiced[doc.currency] ?? 0) + matched;
+      if (doc.paymentStatus === "paid") {
+        collected[doc.currency] = (collected[doc.currency] ?? 0) + matched;
+      }
+    }
+    return { activeEngagements, totalEngagements, invoiced, collected };
   }
 
   function toggleCapability(list: string[], id: string): string[] {
@@ -395,6 +462,7 @@ export function PriceCatalogManager() {
                           {" · "}{item.taxRate !== null ? `${item.taxRate}% tax` : "org default tax"}
                           {item.description ? ` · ${item.description}` : ""}
                         </div>
+                        <CatalogItemPerformance stats={statsFor(item.id)} />
                       </div>
                       <div style={{ display: "flex", gap: "var(--v2-space-2)", alignItems: "center" }}>
                         <Badge tone={item.active ? "success" : "neutral"}>{item.active ? "Active" : "Inactive"}</Badge>
@@ -445,6 +513,49 @@ export function PriceCatalogManager() {
       </Section>
 
       {error && <p style={{ color: "var(--v2-danger)" }}>{error}</p>}
+    </div>
+  );
+}
+
+// The "is this actually selling" line — real engagement and invoice
+// counts, not a projection. An item with no engagements and no
+// invoices says so plainly ("Not sold yet") rather than showing
+// nothing, since a silent blank looks like the stats simply didn't
+// load.
+function CatalogItemPerformance({ stats }: { stats: CatalogItemStats }) {
+  const invoicedEntries = Object.entries(stats.invoiced);
+  const collectedEntries = Object.entries(stats.collected);
+  const hasActivity = stats.totalEngagements > 0 || invoicedEntries.length > 0;
+
+  if (!hasActivity) {
+    return (
+      <div style={{ fontSize: "0.75rem", color: "var(--v2-text-faint)", marginTop: 2 }}>
+        Not sold yet
+      </div>
+    );
+  }
+
+  const engagementText = stats.activeEngagements > 0
+    ? `${stats.activeEngagements} active engagement${stats.activeEngagements === 1 ? "" : "s"}${stats.totalEngagements > stats.activeEngagements ? ` (${stats.totalEngagements} total)` : ""}`
+    : stats.totalEngagements > 0
+      ? `${stats.totalEngagements} past engagement${stats.totalEngagements === 1 ? "" : "s"}, none active`
+      : "No engagements yet";
+
+  return (
+    <div style={{ fontSize: "0.75rem", color: "var(--v2-text-faint)", marginTop: 2 }}>
+      {engagementText}
+      {invoicedEntries.length > 0 && (
+        <>
+          {" · Invoiced "}
+          {invoicedEntries.map(([cur, amt]) => money(amt, cur)).join(", ")}
+        </>
+      )}
+      {collectedEntries.length > 0 && (
+        <>
+          {" · Collected "}
+          {collectedEntries.map(([cur, amt]) => money(amt, cur)).join(", ")}
+        </>
+      )}
     </div>
   );
 }
