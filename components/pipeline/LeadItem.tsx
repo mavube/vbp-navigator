@@ -8,6 +8,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { CommentThread } from "@/components/collaboration/CommentThread";
 import type { Lead, LeadStage } from "@/components/pipeline/types";
 import { ASSESSMENT_QUESTIONS } from "@/lib/assessment-questions";
+import { checkPmpEligibility } from "@/lib/pmp-eligibility";
 
 const STAGE_ORDER: LeadStage[] = ["new", "contacted", "qualified", "won"];
 const STAGE_TONE: Record<LeadStage, "neutral" | "accent" | "success" | "danger"> = {
@@ -77,6 +78,14 @@ export function LeadItem({
     label: q.label,
     value: lead.assessmentAnswers?.[q.key],
   })).filter((e) => e.value !== undefined && e.value !== null && e.value !== "");
+
+  // Phase 2 — PMP eligibility, facts only. Recomputed live from the
+  // stored assessmentAnswers (never persisted separately — see
+  // lib/pmp-eligibility.ts) whenever this lead's answers came from the
+  // PMP eligibility question set rather than the generic assessment
+  // questions above (detected by the presence of educationPathway, a
+  // key unique to the PMP question set — see lib/pmp-eligibility.ts).
+  const pmpFacts = lead.assessmentAnswers && "educationPathway" in lead.assessmentAnswers ? checkPmpEligibility(lead.assessmentAnswers) : null;
 
   return (
     <Card style={{ padding: "var(--v2-space-4)" }}>
@@ -148,6 +157,44 @@ export function LeadItem({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {pmpFacts && (
+        <div
+          style={{
+            marginTop: "var(--v2-space-3)",
+            padding: "var(--v2-space-3)",
+            background: "var(--v2-surface-sunken)",
+            border: "1px solid var(--v2-border)",
+            borderRadius: "var(--v2-radius, 8px)",
+          }}
+        >
+          <div style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: "var(--v2-text-faint)", marginBottom: 6 }}>
+            PMP Eligibility — facts
+          </div>
+          <div style={{ display: "grid", gap: 4, fontSize: "0.82rem" }}>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>Education pathway: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{pmpFacts.pathway ? pmpFacts.pathway.label : "Not specified"}</span>
+            </div>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>Reported experience: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>
+                {pmpFacts.reportedMonths !== null ? `${pmpFacts.reportedMonths} months` : "Not specified"}
+                {pmpFacts.pathway ? ` (pathway requires ${pmpFacts.pathway.requiredMonths})` : ""}
+              </span>
+            </div>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>Within 10-year window: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{pmpFacts.recency ?? "Not specified"}</span>
+            </div>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>Training: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{pmpFacts.training ?? "Not specified"}</span>
+            </div>
+          </div>
+          <p style={{ fontSize: "0.8rem", fontWeight: 500, margin: "6px 0 0" }}>{pmpFacts.statement}</p>
         </div>
       )}
 

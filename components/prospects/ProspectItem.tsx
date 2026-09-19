@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
 import type { Prospect, ProspectStatus, ServiceOption } from "@/components/prospects/types";
+import { checkPmpEligibility } from "@/lib/pmp-eligibility";
 
 type ProspectAction = "reviewed" | "declined" | "promote";
 
@@ -94,6 +95,11 @@ export function ProspectItem({
   }
 
   const answerEntries = Object.entries(prospect.assessmentAnswers || {}).filter(([, v]) => v);
+  // Phase 2 — PMP eligibility, facts only. Same detection and
+  // computation as LeadItem.tsx (see lib/pmp-eligibility.ts) — a
+  // Prospect who answered the PMP eligibility questions gets the same
+  // facts panel here, before promotion, not just after.
+  const pmpFacts = prospect.assessmentAnswers && "educationPathway" in prospect.assessmentAnswers ? checkPmpEligibility(prospect.assessmentAnswers) : null;
 
   return (
     <Card style={{ padding: "var(--v2-space-4)" }}>
@@ -128,14 +134,52 @@ export function ProspectItem({
         <p style={{ fontSize: "0.85rem", color: "var(--v2-text-muted)", margin: "var(--v2-space-2) 0 0" }}>{prospect.message}</p>
       )}
 
-      {answerEntries.length > 0 && (
-        <div style={{ margin: "var(--v2-space-2) 0 0", fontSize: "0.8rem", color: "var(--v2-text-muted)" }}>
-          {answerEntries.map(([key, value]) => (
-            <div key={key}>
-              <strong style={{ color: "var(--v2-text)" }}>{key}:</strong> {String(value)}
+      {pmpFacts ? (
+        <div
+          style={{
+            margin: "var(--v2-space-2) 0 0",
+            padding: "var(--v2-space-3)",
+            background: "var(--v2-surface-sunken)",
+            border: "1px solid var(--v2-border)",
+            borderRadius: "var(--v2-radius, 8px)",
+          }}
+        >
+          <div style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", color: "var(--v2-text-faint)", marginBottom: 6 }}>
+            PMP Eligibility — facts
+          </div>
+          <div style={{ display: "grid", gap: 4, fontSize: "0.82rem" }}>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>Education pathway: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{pmpFacts.pathway ? pmpFacts.pathway.label : "Not specified"}</span>
             </div>
-          ))}
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>Reported experience: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>
+                {pmpFacts.reportedMonths !== null ? `${pmpFacts.reportedMonths} months` : "Not specified"}
+                {pmpFacts.pathway ? ` (pathway requires ${pmpFacts.pathway.requiredMonths})` : ""}
+              </span>
+            </div>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>Within 10-year window: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{pmpFacts.recency ?? "Not specified"}</span>
+            </div>
+            <div>
+              <span style={{ color: "var(--v2-text-muted)" }}>Training: </span>
+              <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{pmpFacts.training ?? "Not specified"}</span>
+            </div>
+          </div>
+          <p style={{ fontSize: "0.8rem", fontWeight: 500, margin: "6px 0 0" }}>{pmpFacts.statement}</p>
         </div>
+      ) : (
+        answerEntries.length > 0 && (
+          <div style={{ margin: "var(--v2-space-2) 0 0", fontSize: "0.8rem", color: "var(--v2-text-muted)" }}>
+            {answerEntries.map(([key, value]) => (
+              <div key={key}>
+                <strong style={{ color: "var(--v2-text)" }}>{key}:</strong> {String(value)}
+              </div>
+            ))}
+          </div>
+        )
       )}
 
       {(prospect.status === "new" || prospect.status === "reviewed") && (

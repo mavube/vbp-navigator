@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ASSESSMENT_QUESTIONS } from "@/lib/assessment-questions";
 import { DISCOVERY_QUESTIONS, CATEGORY_ADAPTIVE_QUESTION } from "@/lib/discovery-questions";
+import { PMP_ELIGIBILITY_QUESTIONS, checkPmpEligibility, isPmpProduct } from "@/lib/pmp-eligibility";
 
 interface PublicService {
   id: string;
@@ -201,6 +202,17 @@ export function StartForm({ orgSlug }: { orgSlug: string }) {
   const showAssessment = usingProductPicker && selectedProduct?.offeringType === "Certification Program";
   const isGeneralDiscovery = usingProductPicker && !!selectedProduct && !showAssessment;
   const adaptiveQuestion = isGeneralDiscovery && selectedProduct ? CATEGORY_ADAPTIVE_QUESTION[selectedProduct.category] : undefined;
+  // Phase 2 — PMP eligibility, facts only. A Certification item whose
+  // catalog name mentions PMP gets PMI's real four-input eligibility
+  // questions instead of the generic assessment questions (see
+  // lib/pmp-eligibility.ts's header comment for why this is a
+  // name-based signal rather than a new catalog field). Any other
+  // Certification item — none exist in GDC's catalog today, but the
+  // app stays catalog-driven rather than PMP-only — still gets the
+  // original generic questions.
+  const isPmpEligibility = showAssessment && !!selectedProduct && isPmpProduct(selectedProduct.name);
+  const assessmentQuestions = isPmpEligibility ? PMP_ELIGIBILITY_QUESTIONS : ASSESSMENT_QUESTIONS;
+  const pmpFacts = isPmpEligibility ? checkPmpEligibility(answers) : null;
 
   function entryTitle(): string {
     if (!usingProductPicker) return orgName ? `Get started with ${orgName}` : "Get started";
@@ -268,6 +280,45 @@ export function StartForm({ orgSlug }: { orgSlug: string }) {
             ? "Your eligibility details have been received. Someone from the team will follow up on next steps."
             : "Your submission has been received. Someone from the team will be in touch."}
         </p>
+        {pmpFacts && (
+          <div
+            style={{
+              marginTop: "var(--v2-space-4)",
+              padding: "var(--v2-space-4)",
+              border: "1px solid var(--v2-border)",
+              borderRadius: "var(--v2-radius, 8px)",
+              background: "var(--v2-surface-sunken, transparent)",
+              textAlign: "left",
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: "var(--v2-space-2)" }}>PMP Eligibility Check</div>
+            <div style={{ display: "grid", gap: 6, fontSize: "0.85rem" }}>
+              <div>
+                <span style={{ color: "var(--v2-text-muted)" }}>Education pathway: </span>
+                <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{pmpFacts.pathway ? pmpFacts.pathway.label : "Not specified"}</span>
+              </div>
+              <div>
+                <span style={{ color: "var(--v2-text-muted)" }}>Reported experience: </span>
+                <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>
+                  {pmpFacts.reportedMonths !== null ? `${pmpFacts.reportedMonths} months` : "Not specified"}
+                  {pmpFacts.pathway ? ` (pathway requires ${pmpFacts.pathway.requiredMonths} months)` : ""}
+                </span>
+              </div>
+              <div>
+                <span style={{ color: "var(--v2-text-muted)" }}>Within PMI's 10-year window: </span>
+                <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{pmpFacts.recency ?? "Not specified"}</span>
+              </div>
+              <div>
+                <span style={{ color: "var(--v2-text-muted)" }}>Training: </span>
+                <span style={{ color: "var(--v2-text)", fontWeight: 500 }}>{pmpFacts.training ?? "Not specified"}</span>
+              </div>
+            </div>
+            <p style={{ marginTop: "var(--v2-space-3)", fontWeight: 500 }}>{pmpFacts.statement}</p>
+            <p style={{ marginTop: "var(--v2-space-2)", fontSize: "0.78rem", color: "var(--v2-text-faint)" }}>
+              This is a plain read of what you told us against PMI&apos;s published requirements — not an official PMI determination.
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -308,9 +359,11 @@ export function StartForm({ orgSlug }: { orgSlug: string }) {
     <>
       <h1>{entryTitle()}</h1>
       <p className="v2-public-intro">
-        {showAssessment
-          ? "A few questions about your education and experience so we can check them against PMP's published eligibility criteria before you commit to a program. This isn't an official PMI determination — it's how we get you the right guidance."
-          : "A few quick questions so we understand what you need before we talk — nothing here commits you to anything."}
+        {isPmpEligibility
+          ? "A few questions about your education and experience so we can check them against PMI's published PMP eligibility criteria before you commit to a program. This isn't an official PMI determination — it's how we get you the right guidance."
+          : showAssessment
+            ? "A few questions about your education and experience so we understand where you're starting from before you commit to a program."
+            : "A few quick questions so we understand what you need before we talk — nothing here commits you to anything."}
       </p>
 
       {usingProductPicker && (
@@ -362,7 +415,7 @@ export function StartForm({ orgSlug }: { orgSlug: string }) {
         )}
 
         {showAssessment &&
-          ASSESSMENT_QUESTIONS.map((q) => (
+          assessmentQuestions.map((q) => (
             <QuestionField key={q.key} q={q} value={answers[q.key] ?? ""} onChange={(v) => setAnswers((prev) => ({ ...prev, [q.key]: v }))} />
           ))}
 
@@ -413,7 +466,7 @@ export function StartForm({ orgSlug }: { orgSlug: string }) {
   );
 }
 
-function QuestionField({ q, value, onChange }: { q: { key: string; label: string; type: "select" | "text"; options?: string[] }; value: string; onChange: (v: string) => void }) {
+function QuestionField({ q, value, onChange }: { q: { key: string; label: string; type: "select" | "text" | "number"; options?: string[] }; value: string; onChange: (v: string) => void }) {
   return (
     <div className="v2-public-field">
       <label htmlFor={q.key}>{q.label}</label>
@@ -426,6 +479,8 @@ function QuestionField({ q, value, onChange }: { q: { key: string; label: string
             </option>
           ))}
         </select>
+      ) : q.type === "number" ? (
+        <Input id={q.key} type="number" min="0" step="1" value={value} onChange={(e) => onChange(e.target.value)} />
       ) : (
         <textarea id={q.key} className="v2-input" rows={2} value={value} onChange={(e) => onChange(e.target.value)} />
       )}
